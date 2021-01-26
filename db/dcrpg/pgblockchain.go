@@ -6207,3 +6207,8 @@ func (pgb *ChainDB) MixedUtxosByHeight() (heights, utxoCountReg, utxoValueReg, u
 	return
 
 }
+
+// OldestTransaction retrieves data of the oldest transaction of an address
+func (pgb *ChainDB) OldestTransaction(address string) (*dbtypes.AddressRowCompact, error) {
+	return pgb.AddressCache.OldestAddressTransaction(address)
+}
