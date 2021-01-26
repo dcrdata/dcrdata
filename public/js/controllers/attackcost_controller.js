@@ -3,6 +3,7 @@ import TurboQuery from '../helpers/turbolinks_helper'
 import { getDefault } from '../helpers/module_helper'
 import globalEventBus from '../services/event_bus_service'
 import dompurify from 'dompurify'
+import axios from 'axios'
 
 function digitformat (amount, decimalPlaces, noComma) {
   if (!amount) return 0
@@ -39,7 +40,7 @@ function removeTrailingZeros (value) {
 }
 
 let Dygraph // lazy loaded on connect
-var height, dcrPrice, hashrate, tpSize, tpValue, tpPrice, graphData, currentPoint, coinSupply
+var height, currentDcrPrice, dcrPrice, btcPrice, marketAvgDcrPrice, totalObUnits, totalObCost, hashrate, tpSize, tpValue, tpPrice, graphData, currentPoint, coinSupply
 
 function rateCalculation (y) {
   y = y || 0.99 // 0.99 TODO confirm why 0.99 is used as default instead of 1
@@ -113,21 +114,26 @@ export default class extends Controller {
   static get targets () {
     return [
       'actualHashRate', 'attackPercent', 'attackPeriod', 'blockHeight', 'countDevice', 'device',
-      'deviceCost', 'deviceDesc', 'deviceName', 'external', 'internal', 'internalHash', 'kwhRate',
-      'kwhRateLabel', 'otherCosts', 'otherCostsValue', 'priceDCR', 'internalAttackText', 'targetHashRate',
-      'externalAttackText', 'externalAttackPosText', 'additionalDcr', 'newTicketPoolValue', 'internalAttackPosText',
-      'additionalHashRate', 'newHashRate', 'targetPos', 'targetPow', 'ticketAttackSize', 'ticketPoolAttack', 'ticketPoolSize',
-      'ticketPoolSizeLabel', 'ticketPoolValue', 'ticketPrice', 'tickets', 'ticketSizeAttack', 'durationLongDesc',
-      'total', 'totalDCRPos', 'totalDeviceCost', 'totalElectricity', 'totalExtraCostRate', 'totalKwh', 'totalPos', 'totalPow',
-      'graph', 'labels', 'projectedTicketPrice', 'projectedTicketPriceIncrease', 'attackType', 'attackPosPercentAmountLabel',
-      'dcrPriceLabel', 'totalDCRPosLabel', 'projectedPriceDiv', 'attackNotPossibleWrapperDiv', 'coinSupply', 'totalAttackCostContainer'
+      'deviceCost', 'deviceDesc', 'deviceName', 'external', 'internal', 'internalHash',
+      'kwhRate', 'kwhRateLabel', 'otherCosts', 'otherCostsValue', 'priceDCR', 'priceDCRWrapper',
+      'internalAttackText', 'targetHashRate', 'externalAttackText',
+      'externalAttackPosText', 'additionalDcr', 'newTicketPoolValue', 'internalAttackPosText',
+      'additionalHashRate', 'newHashRate', 'targetPos', 'targetPow',
+      'ticketAttackSize', 'ticketPoolAttack', 'ticketPoolSize', 'ticketPoolSizeLabel',
+      'ticketPoolValue', 'ticketPrice', 'tickets', 'ticketSizeAttack', 'durationLongDesc',
+      'total', 'totalDCRPos', 'totalDeviceCost', 'totalElectricity', 'totalExtraCostRate', 'totalKwh',
+      'totalPos', 'totalPow', 'graph', 'labels', 'projectedTicketPrice', 'projectedTicketPriceIncrease', 'attackType',
+      'marketVolume', 'marketValue', 'marketAvgDcrPrice', 'priceType', 'projectedDcrPriceDiv', 'projectedDcrPrice',
+      'projectedDcrPriceIncrease', 'dcrPriceIncrease', 'acquiredDcrCost', 'acquiredDcrValue', 'lowOrderBookWarning',
+      'attackPosPercentAmountLabel', 'dcrPriceLabel', 'totalDCRPosLabel', 'projectedPriceDiv', 'attackNotPossibleWrapperDiv',
+      'coinSupply', 'totalAttackCostContainer', 'predictedTooltip', 'priceTypeCurrent'
     ]
   }
 
   async connect () {
     this.query = new TurboQuery()
     this.settings = TurboQuery.nullTemplate([
-      'attack_time', 'target_pow', 'kwh_rate', 'other_costs', 'target_pos', 'price', 'device', 'attack_type'
+      'attack_time', 'target_pow', 'kwh_rate', 'other_costs', 'target_pos', 'device', 'attack_type', 'price_type'
     ])
 
     // Get initial view settings from the url
@@ -135,7 +141,8 @@ export default class extends Controller {
 
     height = parseInt(this.data.get('height'))
     hashrate = parseInt(this.data.get('hashrate'))
-    dcrPrice = parseFloat(this.data.get('dcrprice'))
+    currentDcrPrice = parseFloat(this.data.get('dcrprice'))
+    btcPrice = parseFloat(this.data.get('btcprice'))
     tpPrice = parseFloat(this.data.get('ticketPrice'))
     tpValue = parseFloat(this.data.get('ticketPoolValue'))
     tpSize = parseInt(this.data.get('ticketPoolSize'))
@@ -147,9 +154,9 @@ export default class extends Controller {
       kwh_rate: 0.1,
       other_costs: 5,
       target_pos: 51,
-      price: dcrPrice,
       device: 0,
-      attack_type: externalAttackType
+      attack_type: externalAttackType,
+      price_type: 'current'
     }
 
     if (this.settings.attack_time) this.attackPeriodTarget.value = parseInt(this.settings.attack_time)
@@ -157,7 +164,6 @@ export default class extends Controller {
     if (this.settings.kwh_rate) this.kwhRateTarget.value = parseFloat(this.settings.kwh_rate)
     if (this.settings.other_costs) this.otherCostsTarget.value = parseFloat(this.settings.other_cost)
     if (this.settings.target_pos) this.setAllInputs(this.targetPosTargets, parseFloat(this.settings.target_pos))
-    if (this.settings.price) this.priceDCRTarget.value = parseFloat(this.settings.price)
     if (this.settings.device) this.setDevice(this.settings.device)
     if (this.settings.attack_type) this.attackTypeTarget.value = this.settings.attack_type
     if (this.settings.target_pos) this.attackPercentTarget.value = parseInt(this.targetPosTarget.value) / 100
@@ -165,6 +171,34 @@ export default class extends Controller {
     if (this.settings.attack_type !== internalAttackType) {
       this.settings.attack_type = externalAttackType
     }
+    switch (this.settings.price_type === null) {
+      case 'predicted':
+        this.hideAll(this.priceDCRWrapperTargets)
+        this.showAll(this.projectedDcrPriceDivTargets)
+        this.showAll(this.predictedTooltipTargets)
+        break
+      default:
+        this.showAll(this.priceDCRWrapperTargets)
+        this.hideAll(this.predictedTooltipTargets)
+        this.settings.price_type = 'current'
+        break
+    }
+    switch (this.settings.attack_type) {
+      case externalAttackType:
+        this.priceTypeTarget.disabled = false
+        this.hideAll(this.priceTypeCurrentTargets)
+        this.showAll(this.priceTypeTargets)
+        break
+      default:
+        this.settings.price_type = 'current'
+        this.priceTypeTarget.value = 'current'
+        this.showAll(this.priceTypeCurrentTargets)
+        this.hideAll(this.priceTypeTargets)
+        this.priceTypeTarget.disabled = true
+        break
+    }
+    this.priceTypeTarget.value = this.settings.price_type
+    await this.refreshMarketData()
     this.setDevicesDesc()
     this.updateSliderData()
 
@@ -174,7 +208,7 @@ export default class extends Controller {
 
     // dygraph does not provide a way to disable zoom on y-axis https://code.google.com/archive/p/dygraphs/issues/384
     // this is a hack as doZoomY_ is marked as private
-    Dygraph.prototype.doZoomY_ = function (lowY, highY) {}
+    Dygraph.prototype.doZoomY_ = function (lowY, highY) { }
 
     this.plotGraph()
     this.processNightMode = (params) => {
@@ -292,6 +326,25 @@ export default class extends Controller {
 
   chooseAttackType () {
     this.settings.attack_type = this.selectedAttackType()
+    switch (this.settings.attack_type) {
+      case externalAttackType:
+        this.priceTypeTarget.disabled = false
+        this.hideAll(this.priceTypeCurrentTargets)
+        this.showAll(this.priceTypeTargets)
+        break
+      default:
+        this.settings.price_type = 'current'
+        this.priceTypeTarget.value = 'current'
+        this.showAll(this.priceTypeCurrentTargets)
+        this.hideAll(this.priceTypeTargets)
+        this.priceTypeTarget.disabled = true
+        break
+    }
+    if (this.settings.price_type !== 'current') {
+      this.hideAll(this.priceDCRWrapperTargets)
+    } else {
+      this.showAll(this.priceDCRWrapperTargets)
+    }
     this.updateSliderData()
   }
 
@@ -311,12 +364,6 @@ export default class extends Controller {
     this.setAllInputs(this.targetPosTargets, e.currentTarget.value)
     this.updateQueryString()
     this.attackPercentTarget.value = parseFloat(this.targetPosTarget.value) / 100
-    this.updateSliderData()
-  }
-
-  updatePrice () {
-    this.settings.price = this.priceDCRTarget.value
-    dcrPrice = this.priceDCRTarget.value
     this.updateSliderData()
   }
 
@@ -370,20 +417,69 @@ export default class extends Controller {
         this.setAllValues(this.newHashRateTargets, digitformat(this.targetHashRate + hashrate, 4))
         this.setAllValues(this.additionalHashRateTargets, digitformat(this.targetHashRate, 4))
         this.projectedPriceDivTarget.style.display = 'block'
+        if (this.settings.price_type === 'predicted') {
+          this.showAll(this.projectedDcrPriceDivTargets)
+          this.showAll(this.predictedTooltipTargets)
+        }
         this.internalAttackTextTarget.classList.add('d-none')
         this.internalAttackPosTextTarget.classList.add('d-none')
         this.externalAttackTextTarget.classList.remove('d-none')
-        this.externalAttackPosTextTarget.classList.remove('d-node')
+        this.externalAttackPosTextTarget.classList.remove('d-none')
         break
       case internalAttackType:
       default:
         this.projectedPriceDivTarget.style.display = 'none'
+        this.hideAll(this.projectedDcrPriceDivTargets)
+        this.hideAll(this.predictedTooltipTargets)
         this.externalAttackTextTarget.classList.add('d-none')
-        this.externalAttackPosTextTarget.classList.add('d-node')
+        this.externalAttackPosTextTarget.classList.add('d-none')
         this.internalAttackTextTarget.classList.remove('d-none')
         this.internalAttackPosTextTarget.classList.remove('d-none')
         break
     }
+  }
+
+  setPriceType (e) {
+    this.settings.price_type = e.currentTarget.value
+    if (this.settings.price_type === 'predicted') {
+      this.hideAll(this.priceDCRWrapperTargets)
+      this.showAll(this.projectedDcrPriceDivTargets)
+      this.showAll(this.predictedTooltipTargets)
+    } else {
+      this.showAll(this.priceDCRWrapperTargets)
+      this.hideAll(this.projectedDcrPriceDivTargets)
+      this.hideAll(this.predictedTooltipTargets)
+    }
+    this.calculate()
+  }
+
+  async refreshMarketData () {
+    const orderDeptUrl = '/api/chart/market/aggregated/depth'
+    let response = await axios.get(orderDeptUrl)
+    const aggMarket = response.data
+    let totalVolume = 0
+    let totalCost = 0
+    const orderCount = aggMarket.data.asks.length
+    for (let i = 0; i <= 0.95 * orderCount; i++) {
+      let ask = aggMarket.data.asks[i]
+      if (ask === undefined) continue
+      if (Array.isArray(ask.volumes)) {
+        let volume = ask.volumes.reduce((a, b) => { return a + b }, 0)
+        totalVolume += volume
+        totalCost += (volume * ask.price)
+      }
+    }
+    totalObCost = totalCost
+    totalObUnits = totalVolume
+    marketAvgDcrPrice = totalCost / totalVolume
+  }
+
+  calcAcquiredDcrCost (currentDcrPrice, averageIncreaseValue, buyVolume) {
+    let commutator = 0
+    for (let v = 1; v <= buyVolume; v++) {
+      commutator += currentDcrPrice + (averageIncreaseValue * v)
+    }
+    return commutator
   }
 
   updateSliderData () {
@@ -414,7 +510,7 @@ export default class extends Controller {
     this.calculate(true)
   }
 
-  calculate (disableHashRateUpdate) {
+  async calculate (disableHashRateUpdate) {
     if (!disableHashRateUpdate) this.updateTargetHashRate()
 
     this.updateQueryString()
@@ -439,13 +535,58 @@ export default class extends Controller {
     this.projectedTicketPriceIncreaseTarget.innerHTML = digitformat(100 * (projectedTicketPrice - tpPrice) / tpPrice, 2)
     this.ticketPoolValueTarget.innerHTML = digitformat(hashrate, 3)
 
-    var totalDCRPos = this.settings.attack_type === externalAttackType ? DCRNeed - tpValue : ticketAttackSize * projectedTicketPrice
-    var totalPos = totalDCRPos * dcrPrice
+    var totalDCRPos = this.settings.attack_type === externalAttackType
+      ? DCRNeed - tpValue : ticketAttackSize * projectedTicketPrice
+    var totalPos = totalDCRPos * currentDcrPrice
+
+    if (totalDCRPos > totalObUnits) {
+      this.showAll(this.lowOrderBookWarningTargets)
+    } else {
+      this.hideAll(this.lowOrderBookWarningTargets)
+    }
+
+    // Since the nature of the markets order book is
+    // compounding, based on the available data, the cumulative annual growth
+    // rate(CAGR) model is used to measure the growth rate of the market.
+    // https://en.wikipedia.org/wiki/Compound_annual_growth_rate
+
+    // Although, CAGR is usually used in business and investment, it also has a
+    // reputation in prediction (forecasting future values).
+    // Here, CAGR is used to get the slope between the current price and the
+    // cumulative market price after purchasing the entire order book (95% to remove outliers).
+    // The slope is then used to calculate the estimated cumulative price of the total DCR needed for the attack.
+    //
+    // increaseRate = (Ravg / Rspot)^(1/(Vask - 1)) - 1
+    // Ravg = Volume-averaged rate of aggregated asks
+    // Rspot = Mid market rate, the currentDcrPrice
+    // Vask = Total volume of aggregated asks, the totalObUnits
+    let increaseRate = Math.pow(((totalObCost / totalObUnits) * btcPrice) / currentDcrPrice, 1 / (totalObUnits - 1)) - 1
+    const averageIncreaseValue = increaseRate * currentDcrPrice
+    let projectedDcrPrice = currentDcrPrice + (averageIncreaseValue * totalDCRPos)
+    const acquiredDcrCost = this.calcAcquiredDcrCost(currentDcrPrice, averageIncreaseValue, totalDCRPos)
+
+    const increasePercentage = (projectedDcrPrice - currentDcrPrice) / currentDcrPrice
+    this.projectedDcrPriceIncreaseTarget.innerHTML = digitformat(increasePercentage, 0)
+    this.setAllValues(this.projectedDcrPriceTargets, digitformat(projectedDcrPrice, 0))
+    this.setAllValues(this.marketVolumeTargets, digitformat(totalObUnits, 2))
+    this.setAllValues(this.dcrPriceIncreaseTargets, digitformat(increaseRate, 10))
+    this.setAllValues(this.marketAvgDcrPriceTargets, digitformat(marketAvgDcrPrice * btcPrice - currentDcrPrice))
+    this.setAllValues(this.marketValueTargets, digitformat(totalObCost * btcPrice, 0))
+    this.setAllValues(this.acquiredDcrCostTargets, digitformat(acquiredDcrCost, 0))
+    this.setAllValues(this.acquiredDcrValueTargets, digitformat(totalDCRPos * projectedDcrPrice, 0))
+
+    if (this.settings.price_type === 'predicted' && this.settings.attack_type === externalAttackType) {
+      dcrPrice = projectedDcrPrice
+      totalPos = acquiredDcrCost
+    } else {
+      dcrPrice = currentDcrPrice
+    }
+
     var timeStr = this.attackPeriodTarget.value
     timeStr = this.attackPeriodTarget.value > 1 ? timeStr + ' hours' : timeStr + ' hour'
     this.ticketPoolSizeLabelTarget.innerHTML = digitformat(tpSize, 2)
     this.setAllValues(this.actualHashRateTargets, digitformat(hashrate, 4))
-    this.priceDCRTarget.value = digitformat(dcrPrice, 2)
+    this.priceDCRTarget.textContent = digitformat(currentDcrPrice, 2)
     this.setAllInputs(this.targetPosTargets, digitformat(parseFloat(this.targetPosTarget.value), 2))
     this.ticketPriceTarget.innerHTML = digitformat(tpPrice, 4)
     this.setAllValues(this.targetHashRateTargets, digitformat(this.targetHashRate, 4))
