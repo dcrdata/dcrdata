@@ -6,11 +6,47 @@ package types
 import (
 	"strconv"
 
+	recordsv1 "github.com/decred/politeia/politeiawww/api/records/v1"
+	ticketvotev1 "github.com/decred/politeia/politeiawww/api/ticketvote/v1"
 	piapi "github.com/decred/politeia/politeiawww/api/www/v1"
 )
 
 // Politeia votes occur in 2016 block windows.
 const windowSize = 2016
+
+// Proposaln is the struct that holds all politeia data that dcrdata needs.
+// It is also the object data that we save to the database. It fetches data
+// from three politeia api's: records, comments and ticketvote.
+type Proposaln struct {
+	ID int `json:"id" storm:"id,increment"`
+
+	// Record data
+	State            recordsv1.RecordStateT     `json:"state"`
+	Status           recordsv1.RecordStatusT    `json:"status"`
+	Version          uint32                     `json:"version"`
+	Timestamp        int64                      `json:"timestamp"`
+	Username         string                     `json:"username"`
+	CensorshipRecord recordsv1.CensorshipRecord `json:"censorshiprecord"`
+
+	// Metadata
+	Name string `json:"name"`
+
+	// Comments data
+	NumComments int32 `json:"numcomments`
+
+	// Ticketvote data
+	VoteStatus       ticketvotev1.VoteStatusT  `json:"votestatus"`
+	VoteResults      []ticketvotev1.VoteResult `json:"voteresults"`
+	EndBlockHeight   uint32                    `json:"endblockheight"`
+	EligibleTickets  uint32                    `json:"eligibletickets"`
+	QuorumPercentage uint32                    `json:"quorumpercentage"`
+	PassPercentage   uint32                    `json:"passpercentage"`
+
+	// Timestamps
+	PublishedAt uint64 `json:"publishedat" storm:"index"`
+	CensoredAt  uint64 `json:"censoredat"`
+	AbandonedAt uint64 `json:"abandonedat"`
+}
 
 // ProposalInfo holds the proposal details as document here
 // https://github.com/decred/politeia/blob/master/politeiawww/api/www/v1/api.md#user-proposals.
