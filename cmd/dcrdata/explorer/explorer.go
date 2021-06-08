@@ -124,6 +124,13 @@ type PoliteiaBackend interface {
 	ProposalByRefID(RefID string) (*pitypes.ProposalInfo, error)
 }
 
+type PoliteiaTlogBackend interface {
+	ProposalsLastSync() int64
+	ProposalsCheckUpdates() error
+	ProposalsAll(int, int) ([]*pitypes.ProposalInfo, int, error)
+	ProposalByToken(token string) (*pitypes.ProposalInfo, error)
+}
+
 // agendaBackend implements methods that manage agendas db data.
 type agendaBackend interface {
 	AgendaInfo(agendaID string) (*agendas.AgendaTagged, error)
@@ -209,7 +216,8 @@ type explorerUI struct {
 	chartSource      ChartDataSource
 	agendasSource    agendaBackend
 	voteTracker      *agendas.VoteTracker
-	proposalsSource  PoliteiaBackend
+	proposalsGit     PoliteiaBackend
+	proposalsTlog    PoliteiaTlogBackend
 	dbsSyncing       atomic.Value
 	devPrefetch      bool
 	templates        templates
@@ -279,21 +287,22 @@ func (exp *explorerUI) StopWebsocketHub() {
 
 // ExplorerConfig is the configuration settings for explorerUI.
 type ExplorerConfig struct {
-	DataSource      explorerDataSource
-	ChartSource     ChartDataSource
-	UseRealIP       bool
-	AppVersion      string
-	DevPrefetch     bool
-	Viewsfolder     string
-	XcBot           *exchanges.ExchangeBot
-	AgendasSource   agendaBackend
-	Tracker         *agendas.VoteTracker
-	ProposalsSource PoliteiaBackend
-	PoliteiaURL     string
-	MainnetLink     string
-	TestnetLink     string
-	OnionAddress    string
-	ReloadHTML      bool
+	DataSource    explorerDataSource
+	ChartSource   ChartDataSource
+	UseRealIP     bool
+	AppVersion    string
+	DevPrefetch   bool
+	Viewsfolder   string
+	XcBot         *exchanges.ExchangeBot
+	AgendasSource agendaBackend
+	Tracker       *agendas.VoteTracker
+	ProposalsGit  PoliteiaBackend
+	ProposalsTlog PoliteiaTlogBackend
+	PoliteiaURL   string
+	MainnetLink   string
+	TestnetLink   string
+	OnionAddress  string
+	ReloadHTML    bool
 }
 
 // New returns an initialized instance of explorerUI
@@ -310,7 +319,8 @@ func New(cfg *ExplorerConfig) *explorerUI {
 	exp.xcDone = make(chan struct{})
 	exp.agendasSource = cfg.AgendasSource
 	exp.voteTracker = cfg.Tracker
-	exp.proposalsSource = cfg.ProposalsSource
+	exp.proposalsGit = cfg.ProposalsGit
+	exp.proposalsTlog = cfg.ProposalsTlog
 	exp.politeiaAPIURL = cfg.PoliteiaURL
 	explorerLinks.Mainnet = cfg.MainnetLink
 	explorerLinks.Testnet = cfg.TestnetLink
@@ -593,12 +603,14 @@ func (exp *explorerUI) Store(blockData *blockdata.BlockData, msgBlock *wire.MsgB
 	// Politeia updates happen hourly. Thus, if blocks take 5 minutes on average
 	// to mine, then 12 blocks take approximately 1hr.
 	// https://docs.decred.org/advanced/navigating-politeia-data/#voting-and-comment-data
-	if newBlockData.Height%12 == 0 && exp.proposalsSource != nil {
+	fmt.Println("in explorerUi.Store; block height at point of update?")
+	if newBlockData.Height%12 == 0 && exp.proposalsGit != nil {
 		// Update the proposal DB. This is run asynchronously since it involves
 		// a query to Politeia (a remote system) and we do not want to block
 		// execution.
+		fmt.Println("calling async checkProposalsUpdates")
 		go func() {
-			err := exp.proposalsSource.CheckProposalsUpdates()
+			err := exp.proposalsGit.CheckProposalsUpdates()
 			if err != nil {
 				log.Errorf("(PoliteiaBackend).CheckProposalsUpdates: %v", err)
 			}

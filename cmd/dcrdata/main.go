@@ -27,6 +27,7 @@ import (
 	"github.com/decred/dcrdata/exchanges/v3"
 	"github.com/decred/dcrdata/gov/v4/agendas"
 	"github.com/decred/dcrdata/gov/v4/politeia"
+	"github.com/decred/dcrdata/gov/v4/politeia/tlog"
 
 	"github.com/decred/dcrdata/v6/blockdata"
 	"github.com/decred/dcrdata/v6/db/cache"
@@ -100,6 +101,20 @@ func _main(ctx context.Context) error {
 
 	// Display app version.
 	log.Infof("%s version %v (Go version %s)", AppName, Version(), runtime.Version())
+
+	fmt.Println("--------------- me ---------------")
+	proposalsTlog, err := tlog.NewProposalsTlogDB(cfg.PoliteiaAPIURL,
+		filepath.Join(cfg.DataDir, "proposalstlog.db"))
+	if err != nil {
+		return fmt.Errorf("failed to create new proposals db instance: %v", err)
+	}
+	err = proposalsTlog.ProposalsCheckUpdates()
+	if err != nil {
+		fmt.Println("err !!")
+		fmt.Println(err)
+		return err
+	}
+	fmt.Println("--------------- em ---------------")
 
 	// Grab a Notifier. After all databases are synced, register handlers with
 	// the Register*Group methods, set the best block height with
@@ -494,21 +509,22 @@ func _main(ctx context.Context) error {
 	// Create the explorer system.
 
 	explore := explorer.New(&explorer.ExplorerConfig{
-		DataSource:      chainDB,
-		ChartSource:     charts,
-		UseRealIP:       cfg.UseRealIP,
-		AppVersion:      Version(),
-		DevPrefetch:     !cfg.NoDevPrefetch,
-		Viewsfolder:     "views",
-		XcBot:           xcBot,
-		AgendasSource:   agendaDB,
-		Tracker:         tracker,
-		ProposalsSource: proposalsInstance,
-		PoliteiaURL:     cfg.PoliteiaAPIURL,
-		MainnetLink:     cfg.MainnetLink,
-		TestnetLink:     cfg.TestnetLink,
-		ReloadHTML:      cfg.ReloadHTML,
-		OnionAddress:    cfg.OnionAddress,
+		DataSource:    chainDB,
+		ChartSource:   charts,
+		UseRealIP:     cfg.UseRealIP,
+		AppVersion:    Version(),
+		DevPrefetch:   !cfg.NoDevPrefetch,
+		Viewsfolder:   "views",
+		XcBot:         xcBot,
+		AgendasSource: agendaDB,
+		Tracker:       tracker,
+		ProposalsGit:  proposalsInstance,
+		ProposalsTlog: proposalsTlog,
+		PoliteiaURL:   cfg.PoliteiaAPIURL,
+		MainnetLink:   cfg.MainnetLink,
+		TestnetLink:   cfg.TestnetLink,
+		ReloadHTML:    cfg.ReloadHTML,
+		OnionAddress:  cfg.OnionAddress,
 	})
 	// TODO: allow views config
 	if explore == nil {

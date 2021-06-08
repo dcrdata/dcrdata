@@ -66,7 +66,7 @@ var (
 
 	defaultAgendasDBFileName = "agendas.db"
 	defaultProposalsFileName = "proposals.db"
-	defaultPoliteiaAPIURl    = "https://proposals.decred.org"
+	defaultPoliteiaAPIURl    = "https://proposals.decred.org/api/"
 	defaultChartsCacheDump   = "chartscache.gob"
 
 	defaultPGHost           = "127.0.0.1:5432"
@@ -643,6 +643,9 @@ func loadConfig() (*config, error) {
 		return loadConfigError(err)
 	}
 	cfg.PoliteiaAPIURL = urlPath
+
+	fmt.Println("PoliteiaAPIURL")
+	fmt.Println(urlPath)
 
 	// Check the supplied APIListen address
 	if cfg.APIListen == "" {

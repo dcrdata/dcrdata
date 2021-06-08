@@ -4,8 +4,6 @@
 package types
 
 import (
-	"strconv"
-
 	recordsv1 "github.com/decred/politeia/politeiawww/api/records/v1"
 	ticketvotev1 "github.com/decred/politeia/politeiawww/api/ticketvote/v1"
 	piapi "github.com/decred/politeia/politeiawww/api/www/v1"
@@ -17,30 +15,35 @@ const windowSize = 2016
 // Proposaln is the struct that holds all politeia data that dcrdata needs.
 // It is also the object data that we save to the database. It fetches data
 // from three politeia api's: records, comments and ticketvote.
-type Proposaln struct {
+type ProposalInfo struct {
 	ID int `json:"id" storm:"id,increment"`
 
 	// Record data
-	State            recordsv1.RecordStateT     `json:"state"`
-	Status           recordsv1.RecordStatusT    `json:"status"`
-	Version          uint32                     `json:"version"`
-	Timestamp        int64                      `json:"timestamp"`
-	Username         string                     `json:"username"`
-	CensorshipRecord recordsv1.CensorshipRecord `json:"censorshiprecord"`
+	State     recordsv1.RecordStateT  `json:"state"`
+	Status    recordsv1.RecordStatusT `json:"status"`
+	Token     string                  `json:"token"`
+	Version   uint32                  `json:"version"`
+	Timestamp int64                   `json:"timestamp"`
+	Username  string                  `json:"username"`
 
-	// Metadata
+	// Pi metadata
 	Name string `json:"name"`
 
+	// User metadata
+	UserID string `json:"userid"`
+
 	// Comments data
-	NumComments int32 `json:"numcomments`
+	CommentsCount uint32 `json:"commentscount`
 
 	// Ticketvote data
 	VoteStatus       ticketvotev1.VoteStatusT  `json:"votestatus"`
 	VoteResults      []ticketvotev1.VoteResult `json:"voteresults"`
+	StartBlockHeight uint32                    `json:"startblockheight"`
 	EndBlockHeight   uint32                    `json:"endblockheight"`
 	EligibleTickets  uint32                    `json:"eligibletickets"`
 	QuorumPercentage uint32                    `json:"quorumpercentage"`
 	PassPercentage   uint32                    `json:"passpercentage"`
+	TotalVotes       int64                     `json:"totalvotes"`
 
 	// Timestamps
 	PublishedAt uint64 `json:"publishedat" storm:"index"`
@@ -53,34 +56,34 @@ type Proposaln struct {
 // It also holds the votes status details. The ID field is auto incremented by
 // the db. A proposal can now be uniquely identified by the RefID value and the
 // the contents on the CensorShipRecord struct.
-type ProposalInfo struct {
-	ID              int                `json:"id" storm:"id,increment"`
-	Name            string             `json:"name"`
-	State           ProposalStateType  `json:"state"`
-	Status          ProposalStatusType `json:"status"`
-	Timestamp       uint64             `json:"timestamp"`
-	UserID          string             `json:"userid"`
-	Username        string             `json:"username"`
-	PublicKey       string             `json:"publickey"`
-	Signature       string             `json:"signature"`
-	Version         string             `json:"version"`
-	NumComments     int32              `json:"numcomments"`
-	StatusChangeMsg string             `json:"statuschangemessage"`
-	PublishedDate   uint64             `json:"publishedat" storm:"index"`
-	CensoredDate    uint64             `json:"censoredat"`
-	AbandonedDate   uint64             `json:"abandonedat"`
-	// RefID was added to create an easily readable part of the URL that helps
-	// to reference the proposals details page. Storm db ignores entries with
-	// duplicate pk but returns "ErrAlreadyExists" error if the field other than
-	// the pk has the tag "unique".
-	RefID string `storm:"unique"`
-	// "unique" tag helps to detect when a single proposal instance wants to be
-	// pushed to the db as two different instances instead of one. This bug
-	// happened due to edits made to a proposal title thus new RefID was created.
-	CensorshipRecord `json:"censorshiprecord" storm:"unique"`
-	ProposalVotes    `json:"votes"`
-	// Files           []AttachmentFile   `json:"files"`
-}
+// type ProposalInfo struct {
+// 	ID              int                `json:"id" storm:"id,increment"`
+// 	Name            string             `json:"name"`
+// 	State           ProposalStateType  `json:"state"`
+// 	Status          ProposalStatusType `json:"status"`
+// 	Timestamp       uint64             `json:"timestamp"`
+// 	UserID          string             `json:"userid"`
+// 	Username        string             `json:"username"`
+// 	PublicKey       string             `json:"publickey"`
+// 	Signature       string             `json:"signature"`
+// 	Version         string             `json:"version"`
+// 	NumComments     int32              `json:"numcomments"`
+// 	StatusChangeMsg string             `json:"statuschangemessage"`
+// 	PublishedDate   uint64             `json:"publishedat" storm:"index"`
+// 	CensoredDate    uint64             `json:"censoredat"`
+// 	AbandonedDate   uint64             `json:"abandonedat"`
+// 	// RefID was added to create an easily readable part of the URL that helps
+// 	// to reference the proposals details page. Storm db ignores entries with
+// 	// duplicate pk but returns "ErrAlreadyExists" error if the field other than
+// 	// the pk has the tag "unique".
+// 	RefID string `storm:"unique"`
+// 	// "unique" tag helps to detect when a single proposal instance wants to be
+// 	// pushed to the db as two different instances instead of one. This bug
+// 	// happened due to edits made to a proposal title thus new RefID was created.
+// 	CensorshipRecord `json:"censorshiprecord" storm:"unique"`
+// 	ProposalVotes    `json:"votes"`
+// 	// Files           []AttachmentFile   `json:"files"`
+// }
 
 // Proposals defines an array of proposals payload as returned by RouteAllVetted route.
 type Proposals struct {
@@ -140,8 +143,7 @@ type VoteOption struct {
 	Bits        int32  `json:"bits"`
 }
 
-// ProposalStatusType defines the various proposal statuses available as referenced
-// in https://github.com/decred/politeia/blob/master/politeiawww/api/www/v1/v1.go
+// ProposalStatusType defines the various proposal statuses available in pi API.
 type ProposalStatusType piapi.PropStatusT
 
 func (p ProposalStatusType) String() string {
@@ -209,6 +211,19 @@ func (f ProposalStateType) String() string {
 	}
 }
 
+func RecordStateToProposalState(rs recordsv1.RecordStateT) ProposalStateType {
+	switch rs {
+	case recordsv1.RecordStateInvalid:
+		return InvalidState
+	case recordsv1.RecordStateUnvetted:
+		return UnvettedState
+	case recordsv1.RecordStateVetted:
+		return VettedState
+	default:
+		return UnknownState
+	}
+}
+
 // ProposalStateFromStr converts the string into ProposalStateType value.
 func ProposalStateFromStr(val string) ProposalStateType {
 	switch val {
@@ -241,12 +256,13 @@ func VotesStatuses() map[VoteStatusType]string {
 // Timestamp, CensoredDate, AbandonedDate, PublishedDate, Token, VoteStatus,
 // TotalVotes and count of VoteResults between the two ProposalsInfo structs passed.
 func (pi *ProposalInfo) IsEqual(b *ProposalInfo) bool {
-	if pi.CensorshipRecord != b.CensorshipRecord || pi.Name != b.Name || pi.State != b.State ||
-		pi.NumComments != b.NumComments || pi.StatusChangeMsg != b.StatusChangeMsg ||
-		pi.Status != b.Status || pi.Timestamp != b.Timestamp || pi.Token != b.Token ||
-		pi.CensoredDate != b.CensoredDate || pi.AbandonedDate != b.AbandonedDate ||
+	if pi.Token != b.Token || pi.Name != b.Name || pi.State != b.State ||
+		pi.CommentsCount != b.CommentsCount ||
+		// pi.StatusChangeMsg != b.StatusChangeMsg ||
+		pi.Status != b.Status || pi.Timestamp != b.Timestamp ||
+		pi.CensoredAt != b.CensoredAt || pi.AbandonedAt != b.AbandonedAt ||
 		pi.VoteStatus != b.VoteStatus || pi.TotalVotes != b.TotalVotes ||
-		pi.PublishedDate != b.PublishedDate || len(pi.VoteResults) != len(b.VoteResults) {
+		pi.PublishedAt != b.PublishedAt || len(pi.VoteResults) != len(b.VoteResults) {
 		return false
 	}
 	return true
@@ -278,24 +294,23 @@ type ProposalMetadata struct {
 // arguments.
 func (pi *ProposalInfo) Metadata(tip, targetBlockTime int64) *ProposalMetadata {
 	meta := new(ProposalMetadata)
-	desc := pi.VoteStatus.ShortDesc()
+	desc := ticketvotev1.VoteStatuses[pi.VoteStatus]
 	switch desc {
 	case "Started", "Finished":
-		endHeight, _ := strconv.ParseInt(pi.ProposalVotes.Endheight, 10, 64)
-		meta.StartHeight = endHeight - windowSize
+		meta.StartHeight = int64(pi.EndBlockHeight) - windowSize
 		for _, count := range pi.VoteResults {
-			switch count.Option.OptionID {
+			switch count.ID {
 			case "yes":
-				meta.Yes = count.VotesReceived
+				meta.Yes = int64(count.Votes)
 			case "no":
-				meta.No = count.VotesReceived
+				meta.No = int64(count.Votes)
 			}
 		}
 		meta.VoteCount = meta.Yes + meta.No
 		quorumPct := float32(pi.QuorumPercentage) / 100
-		meta.QuorumCount = int64(quorumPct * float32(pi.NumOfEligibleVotes))
+		meta.QuorumCount = int64(quorumPct * float32(pi.EligibleTickets))
 		meta.PassPercent = float32(pi.PassPercentage) / 100
-		pctVoted := float32(meta.VoteCount) / float32(pi.NumOfEligibleVotes)
+		pctVoted := float32(meta.VoteCount) / float32(pi.EligibleTickets)
 		meta.QuorumAchieved = pctVoted > quorumPct
 		if meta.VoteCount > 0 {
 			meta.Approval = float32(meta.Yes) / float32(meta.VoteCount)
@@ -303,7 +318,7 @@ func (pi *ProposalInfo) Metadata(tip, targetBlockTime int64) *ProposalMetadata {
 		}
 		meta.IsPassing = meta.Approval > meta.PassPercent
 		if desc == "Started" {
-			blocksLeft := endHeight - tip
+			blocksLeft := int64(pi.EndBlockHeight) - tip
 			meta.SecondsTil = blocksLeft * targetBlockTime
 		}
 	}

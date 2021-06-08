@@ -1915,16 +1915,16 @@ func (exp *explorerUI) Search(w http.ResponseWriter, r *http.Request) {
 	// Execute search for proposals by both RefID and proposal token before
 	// the address search because most search strings with alphanumeric
 	// characters are interprated as addresses.
-	if exp.proposalsSource != nil {
+	if exp.proposalsGit != nil {
 		// Check if the search term references a proposal token exists.
-		proposalInfo, err := exp.proposalsSource.ProposalByToken(searchStr)
+		proposalInfo, err := exp.proposalsGit.ProposalByToken(searchStr)
 
-		if err != nil || proposalInfo.RefID == "" {
+		if err != nil {
 			// Check if the search term references a proposal RefID exists.
-			proposalInfo, err = exp.proposalsSource.ProposalByRefID(searchStr)
+			proposalInfo, err = exp.proposalsGit.ProposalByRefID(searchStr)
 		}
-		if err == nil && proposalInfo.RefID != "" {
-			http.Redirect(w, r, "/proposal/"+proposalInfo.RefID, http.StatusPermanentRedirect)
+		if err == nil {
+			http.Redirect(w, r, "/proposal/"+proposalInfo.Token, http.StatusPermanentRedirect)
 			return
 		}
 	}
@@ -2236,7 +2236,7 @@ func (exp *explorerUI) AgendasPage(w http.ResponseWriter, r *http.Request) {
 
 // ProposalPage is the page handler for the "/proposal" path.
 func (exp *explorerUI) ProposalPage(w http.ResponseWriter, r *http.Request) {
-	if exp.proposalsSource == nil {
+	if exp.proposalsGit == nil {
 		errMsg := "Remove the disable-piparser flag to activate it."
 		log.Errorf("proposal page is disabled. %s", errMsg)
 		exp.StatusPage(w, errMsg, fmt.Sprintf(pageDisabledCode, "/proposals"), "", ExpStatusPageDisabled)
@@ -2245,14 +2245,14 @@ func (exp *explorerUI) ProposalPage(w http.ResponseWriter, r *http.Request) {
 
 	// Attempts to retrieve a proposal refID from the URL path.
 	param := getProposalTokenCtx(r)
-	proposalInfo, err := exp.proposalsSource.ProposalByRefID(param)
+	proposalInfo, err := exp.proposalsGit.ProposalByRefID(param)
 	if err != nil {
 		// Check if the URL parameter passed is a proposal token and attempt to
 		// fetch its data.
-		proposalInfo, newErr := exp.proposalsSource.ProposalByToken(param)
-		if newErr == nil && proposalInfo != nil && proposalInfo.RefID != "" {
+		proposalInfo, newErr := exp.proposalsGit.ProposalByToken(param)
+		if newErr == nil && proposalInfo != nil {
 			// redirect to a human readable url (replace the token with the RefID)
-			http.Redirect(w, r, "/proposal/"+proposalInfo.RefID, http.StatusPermanentRedirect)
+			http.Redirect(w, r, "/proposal/"+proposalInfo.Token, http.StatusPermanentRedirect)
 			return
 		}
 
@@ -2288,7 +2288,7 @@ func (exp *explorerUI) ProposalPage(w http.ResponseWriter, r *http.Request) {
 
 // ProposalsPage is the page handler for the "/proposals" path.
 func (exp *explorerUI) ProposalsPage(w http.ResponseWriter, r *http.Request) {
-	if exp.proposalsSource == nil {
+	if exp.proposalsGit == nil {
 		errMsg := "Remove the disable-piparser flag to activate it."
 		log.Errorf("proposals page is disabled. %s", errMsg)
 		exp.StatusPage(w, errMsg, fmt.Sprintf(pageDisabledCode, "/proposals"), "", ExpStatusPageDisabled)
@@ -2331,10 +2331,10 @@ func (exp *explorerUI) ProposalsPage(w http.ResponseWriter, r *http.Request) {
 
 	// Check if filter by votes status query parameter was passed.
 	if filterBy > 0 {
-		proposals, count, err = exp.proposalsSource.AllProposals(int(offset),
+		proposals, count, err = exp.proposalsGit.AllProposals(int(offset),
 			int(rowsCount), int(filterBy))
 	} else {
-		proposals, count, err = exp.proposalsSource.AllProposals(int(offset),
+		proposals, count, err = exp.proposalsGit.AllProposals(int(offset),
 			int(rowsCount))
 	}
 
@@ -2366,7 +2366,7 @@ func (exp *explorerUI) ProposalsPage(w http.ResponseWriter, r *http.Request) {
 		TotalCount:     int64(count),
 		PoliteiaURL:    exp.politeiaAPIURL,
 		LastVotesSync:  exp.dataSource.LastPiParserSync().UTC().Unix(),
-		LastPropSync:   exp.proposalsSource.LastProposalsSync(),
+		LastPropSync:   exp.proposalsGit.LastProposalsSync(),
 		TimePerBlock:   int64(exp.ChainParams.TargetTimePerBlock.Seconds()),
 	})
 

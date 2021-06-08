@@ -20,7 +20,6 @@ import (
 	"github.com/decred/dcrdata/gov/v4/politeia/piclient"
 	pitypes "github.com/decred/dcrdata/gov/v4/politeia/types"
 	"github.com/decred/dcrdata/v6/semver"
-	recordsv1 "github.com/decred/politeia/politeiawww/api/records/v1"
 	piapi "github.com/decred/politeia/politeiawww/api/www/v1"
 	pclient "github.com/decred/politeia/politeiawww/client"
 )
@@ -39,10 +38,11 @@ const dbinfo = "_proposals.db_"
 
 // ProposalDB defines the common data needed to query the proposals db.
 type ProposalDB struct {
-	lastSync   int64 // atomic
-	dbP        *storm.DB
-	client     *pclient.Client
-	APIURLpath string
+	lastSync    int64 // atomic
+	dbP         *storm.DB
+	politeiacli *pclient.Client
+	client      *http.Client
+	APIURLpath  string
 }
 
 // NewProposalsDB opens an exiting database or creates a new DB instance with
@@ -101,15 +101,25 @@ func NewProposalsDB(politeiaURL, dbPath string) (*ProposalDB, error) {
 		Verbose:    false,
 		RawJSON:    false,
 	}
-	c, err := pclient.New(politeiaURL, opts)
+	pc, err := pclient.New(politeiaURL, opts)
 	if err != nil {
 		return nil, err
 	}
 
+	// Create the http client used to query the API endpoints.
+	c := &http.Client{
+		Transport: &http.Transport{
+			MaxIdleConns:       10,
+			IdleConnTimeout:    5 * time.Second,
+			DisableCompression: false,
+		},
+		Timeout: 30 * time.Second,
+	}
 	proposalDB := &ProposalDB{
-		dbP:        db,
-		client:     c,
-		APIURLpath: "",
+		dbP:         db,
+		politeiacli: pc,
+		client:      c,
+		APIURLpath:  "",
 	}
 
 	return proposalDB, nil
@@ -141,73 +151,6 @@ func generateCustomID(title string) (string, error) {
 
 	// Replace all punctuation marks with a hyphen and make it lower case.
 	return reg.ReplaceAllString(strings.ToLower(title), "-"), nil
-}
-
-func fetchVettedTokensByStatus(status recordsv1.RecordStatusT) ([]string, error) {
-	// Fetch all vetted tokens by status from inventory until last page is found
-	page := 0
-	vettedTokens := []string{}
-	for {
-		inventoryReq := recordsv1.Inventory{
-			State: recordsv1.RecordStateVetted,
-			Status: status,
-			Page: uint32(page + 1),
-		}
-		rir, err := db.client.RecordInventory(inventoryReq)
-		if err != nil {
-			return nil, err
-		}
-
-		humanReadableStatus := recordsv1.RecordStatuses[status]
-		vettedTokens = append(vettedTokens, rir.Vetted[humanReadableStatus])
-
-		// Break loop if we fetch last page
-		if len(rir.Vetted[humanReadableStatus]) < recordsv1.InventoryPageSize {
-			break
-		}
-	}
-	return vettedTokens, nil
-}
-
-// fetchVettedProposals returns the vetted proposals from politeia API's.
-// It also cooks up the data needed to save the proposals in storm db.
-// It first fetches the token inventory for the vetted proposals,
-// then fetches the proposal details, then comments and then vote results.
-// Those data are needed for the information provided in the dcrdata UI.
-// nts: improve comment
-// nts: this function will replace the piclient.RetrieveAllProposals and
-// fetchAPIData functionality
-// nts: proceed to break this func in smaller ones if needed
-func (db *ProposalDB) fetchVettedProposals() ([]pitypes.Proposaln, error) {	
-	// Fetch all vetted tokens from inventory
-	var vettedTokens []string
-	vettedPublicTokens, err := fetchVettedTokensByStatus(recordsv1.RecordStatusPublic)
-	if err != nil {
-		return nil, err
-	}
-	vettedArchivedTokens, err := fetchVettedTokensByStatus(recordsv1.RecordStatusArchived)
-	if err != nil {
-		return nil, err
-	}
-	vettedTokens = append(vettedTokens, vettedPublicTokens...)
-	vettedTokens = append(vettedTokens, vettedArchivedTokens...)
-
-	// Fetch record details for each token found in inventory
-	var records map[string]recordsv1.Record
-	for _, token := range vettedTokens {
-		detailsReq := recordsv1.Details {
-			Token: token,
-		}
-		dr, err := db.client.RecordDetails(detailsReq)
-		if err != nil {
-			return nil, err
-		}
-		records[token] = dr.Record
-	}
-
-	// Fetch comment count for each record
-
-	// Fetch vote details for each record
 }
 
 // fetchAPIData returns the API data fetched from the Politeia API endpoints.
@@ -259,27 +202,6 @@ func (db *ProposalDB) fetchAPIData(URLParams string) (pitypes.Proposals, error) 
 		copyURLParams = fmt.Sprintf("?%v=%v", param, data.Data[pageSize-1].TokenVal)
 	}
 	return publicProposals, nil
-}
-
-func (db *ProposalDB) saveProposalsn(proposals []pitypes.Proposaln) error {
-	for i, proposal := range proposals {
-		err := db.dbP.Save(proposal)
-
-		// Check if a duplicate censorship record was detected. If it exists,
-		// it means that the proposal has undergone an update, and it's fixed
-		// by updating the new changes to the db.
-		if err == storm.ErrAlreadyExists {
-			data, err := db.ProposalnByToken(proposal.CensorshipRecord.Token)
-			updateData := *proposal
-			updateData.ID = data.ID
-			err = db.dbP.Update(&updateData)
-			if err != nil {
-				return err
-			}
-		}
-	}
-
-	return nil
 }
 
 // saveProposals adds the proposals data to the db.
@@ -363,16 +285,6 @@ func (db *ProposalDB) saveProposals(publicProposals pitypes.Proposals) (int, err
 	return proposalsSaved, nil
 }
 
-// AllProposalsn fetches the proposals data from the local db.
-func (db *ProposalDB) AllProposalsn(offset, rowsCount int, filterByVoteStatus ticketvotev1.VoteStatusT) ([]*pitypes.Proposalsn, int, error) {
-	var query storm.Query
-
-	if filterByVoteStatus != 0 {
-		query = db.dbP.Select(q.Eq("VoteStatus",
-		pitypes.VoteStatusType(filterByVoteStatus[0])))
-	}
-}
-
 // AllProposals fetches all the proposals data saved to the db.
 func (db *ProposalDB) AllProposals(offset, rowsCount int,
 	filterByVoteStatus ...int) (proposals []*pitypes.ProposalInfo,
@@ -417,14 +329,6 @@ func (db *ProposalDB) ProposalByToken(proposalToken string) (*pitypes.ProposalIn
 	return db.proposal("TokenVal", proposalToken)
 }
 
-func (db *ProposalDB) ProposalnByToken(proposalToken string) (*pitypes.Proposaln, error) {
-	if db == nil || db.dbP == nil {
-		return nil, errDef
-	}
-
-	return db.proposaln("Token", proposalToken)
-}
-
 // ProposalByRefID returns the single proposal identified by the provided refID.
 // RefID is generated from the proposal name and used as the descriptive part of
 // the URL to proposal details page on the /proposal page.
@@ -450,17 +354,6 @@ func (db *ProposalDB) proposal(searchBy, searchTerm string) (*pitypes.ProposalIn
 	return &pInfo, nil
 }
 
-func (db *ProposalDB) proposaln(searchBy, searchTerm string) (*piypes.Proposaln, error) {
-	var proposal pitypes.Proposaln
-	err := db.dbP.Select(q.Eq(searchBy, searchTerm)).Limit(1).First(&proposal)
-	if err != nil {
-		log.Errorf("Failed to fetch data from Proposals DB: %v", err)
-		return nil, err
-	}
-
-	return &proposal, nil
-}
-
 // LastProposalsSync returns the last time a sync to update the proposals was run
 // but not necessarily the last time updates were synced in proposals.db.
 func (db *ProposalDB) LastProposalsSync() int64 {
@@ -470,10 +363,12 @@ func (db *ProposalDB) LastProposalsSync() int64 {
 // CheckProposalsUpdates updates the proposal changes if they exist and updates
 // them to the proposal db.
 func (db *ProposalDB) CheckProposalsUpdates() error {
+	// Sanity check
 	if db == nil || db.dbP == nil {
 		return errDef
 	}
 
+	// Save the timestamp of the last update check
 	defer atomic.StoreInt64(&db.lastSync, time.Now().UTC().Unix())
 
 	// Retrieve and update all current proposals whose vote statuses is either

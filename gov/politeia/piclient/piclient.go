@@ -79,16 +79,16 @@ func RetrieveAllProposals(client *http.Client, APIRootPath, URLParams string) (
 		return nil, err
 	}
 
-	// Append the votes status information to the respective proposals if it exists.
-	for _, val := range publicProposals.Data {
-		for k := range votesInfo.Data {
-			if val.TokenVal == votesInfo.Data[k].Token {
-				val.ProposalVotes = votesInfo.Data[k]
-				// exits the second loop after finding a match.
-				break
-			}
-		}
-	}
+	// // Append the votes status information to the respective proposals if it exists.
+	// for _, val := range publicProposals.Data {
+	// 	for k := range votesInfo.Data {
+	// 		if val.CensorshipRecord.Token == votesInfo.Data[k].Token {
+	// 			val.ProposalVotes = votesInfo.Data[k]
+	// 			// exits the second loop after finding a match.
+	// 			break
+	// 		}
+	// 	}
+	// }
 
 	return &publicProposals, nil
 }
@@ -121,10 +121,10 @@ func RetrieveProposalByToken(client *http.Client, APIRootPath, token string) (*p
 		return nil, fmt.Errorf("retrieving %s proposal vote status failed: %v", token, err)
 	}
 
-	err = json.Unmarshal(data, &proposal.Data.ProposalVotes)
-	if err != nil {
-		return nil, err
-	}
+	// err = json.Unmarshal(data, &proposal.Data.ProposalVotes)
+	// if err != nil {
+	// 	return nil, err
+	// }
 
 	return &proposal, nil
 }

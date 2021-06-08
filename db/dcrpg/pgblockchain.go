@@ -90,6 +90,7 @@ type ticketPoolDataCache struct {
 }
 
 // ProposalsFetcher defines the interface of the proposals plug-n-play data source.
+// nts: Remove this interface; no longer needed?
 type ProposalsFetcher interface {
 	UpdateSignal() <-chan struct{}
 	ProposalsHistory() ([]*pitypes.History, error)
