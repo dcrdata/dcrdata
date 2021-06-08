@@ -3,9 +3,13 @@ package tlog
 import (
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
+	"strings"
 
 	"github.com/decred/politeia/politeiad/plugins/usermd"
+	umplugin "github.com/decred/politeia/politeiad/plugins/usermd"
 	piv1 "github.com/decred/politeia/politeiawww/api/pi/v1"
 	recordsv1 "github.com/decred/politeia/politeiawww/api/records/v1"
 )
@@ -51,4 +55,59 @@ func proposalMetadataDecode(fs []recordsv1.File) (*piv1.ProposalMetadata, error)
 		return nil, fmt.Errorf("proposal metadata not found")
 	}
 	return pmp, nil
+}
+
+// statusChangeMetadataDecode returns the published, censored and abandoned
+// dates from status change metadata streams.
+func statusChangeMetadataDecode(md []recordsv1.MetadataStream) ([]int64, string, error) {
+	var (
+		statuses = make([]umplugin.StatusChangeMetadata, 0, 16)
+	)
+	for _, v := range md {
+		if v.PluginID != umplugin.PluginID {
+			continue
+		}
+
+		// Search for status change metadata
+		switch v.StreamID {
+		case umplugin.StreamIDStatusChanges:
+			d := json.NewDecoder(strings.NewReader(v.Payload))
+			for {
+				var sc umplugin.StatusChangeMetadata
+				err := d.Decode(&sc)
+				if errors.Is(err, io.EOF) {
+					break
+				} else if err != nil {
+					return nil, "", err
+				}
+				statuses = append(statuses, sc)
+			}
+		}
+	}
+
+	var (
+		publishedAt, censoredAt, abandonedAt int64
+		changeMsg                            string
+		changeMsgTimestamp                   int64
+	)
+	for _, v := range statuses {
+		if v.Timestamp > changeMsgTimestamp {
+			changeMsg = v.Reason
+			changeMsgTimestamp = v.Timestamp
+		}
+		switch recordsv1.RecordStatusT(v.Status) {
+		case recordsv1.RecordStatusPublic:
+			publishedAt = v.Timestamp
+		case recordsv1.RecordStatusCensored:
+			censoredAt = v.Timestamp
+		case recordsv1.RecordStatusArchived:
+			abandonedAt = v.Timestamp
+		}
+	}
+
+	return []int64{
+		publishedAt,
+		censoredAt,
+		abandonedAt,
+	}, changeMsg, nil
 }

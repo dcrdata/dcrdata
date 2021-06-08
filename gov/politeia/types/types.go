@@ -38,6 +38,7 @@ type ProposalInfo struct {
 	// Ticketvote data
 	VoteStatus       ticketvotev1.VoteStatusT  `json:"votestatus"`
 	VoteResults      []ticketvotev1.VoteResult `json:"voteresults"`
+	StatusChangeMsg  string                    `json:"statuschangemsg"`
 	StartBlockHeight uint32                    `json:"startblockheight"`
 	EndBlockHeight   uint32                    `json:"endblockheight"`
 	EligibleTickets  uint32                    `json:"eligibletickets"`

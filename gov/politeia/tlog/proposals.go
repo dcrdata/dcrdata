@@ -347,13 +347,29 @@ func (db *ProposalsTlogDB) fetchProposalsData(tokens []string) ([]pitypes.Propos
 		proposal.PassPercent = summary.PassPercentage
 
 		// TODO: total votes
-		// proposal.TotalVotes =
+		var totalVotes uint64
+		for _, v := range summary.Results {
+			totalVotes += v.Votes
+		}
+		proposal.totalVotes = totalVotes
 
-		fmt.Printf("record %s name %s userid %s comments count %d\n",
-			record.CensorshipRecord.Token,
-			proposal.Name,
-			proposal.UserID,
-			proposal.CommentsCount,
+		// Status change metadata
+		ts, changeMsg, err := statusChangeMetadataDecode(record.Metadata)
+		if err != nil {
+			return nil, err
+		}
+
+		proposal.PublishedAt = ts[0]
+		proposal.CensoredAt = ts[1]
+		proposal.AbandonedAt = ts[2]
+		proposal.StatusChangeMsg = changeMsg
+
+
+		fmt.Printf("pulbishedat %s censoredat %s abandonedat %s change msg %s\n",
+			proposal.PublishedAt,
+			proposal.CensoredAt,
+			proposal.AbandonedAt,
+			proposal.StatusChangeMsg,
 		)
 		proposals = append(proposals, proposal)
 	}
@@ -383,38 +399,6 @@ func (db *ProposalsTlogDB) saveProposals(proposals []pitypes.ProposalInfo) error
 	}
 
 	return nil
-}
-
-// ProposalsAll fetches the proposals data from the local db.
-//
-// Satisfies the PoliteiaBackend interface.
-func (db *ProposalsTlogDB) ProposalsAll(offset, rowsCount int) ([]*pitypes.ProposalInfo, int, error) {
-	var query storm.Query
-
-	// if filterByVoteStatus != 0 {
-	// 	query = db.dbP.Select(q.Eq("VoteStatus",
-	// 		ticketvotev1.VoteStatuses[filterByVoteStatus]))
-	// } else {
-	query = db.dbP.Select()
-	// }
-
-	// Count the proposals based on the query created above.
-	totalCount, err := query.Count(&pitypes.ProposalInfo{})
-	if err != nil {
-		return nil, 0, err
-	}
-
-	// Return the proposals listing starting with the newest.
-	var proposals []*pitypes.ProposalInfo
-	err = query.Skip(offset).Limit(rowsCount).Reverse().OrderBy("Timestamp").
-		Find(&proposals)
-	if err != nil && err != storm.ErrNotFound {
-		log.Errorf("Failed to fetch data from Proposals DB: %v", err)
-	} else {
-		err = nil
-	}
-
-	return proposals, totalCount, nil
 }
 
 func (db *ProposalsTlogDB) ProposalByToken(token string) (*pitypes.ProposalInfo, error) {
@@ -490,6 +474,40 @@ func (db *ProposalsTlogDB) updateInProgressProposals() (int, error) {
 }
 
 func (db *ProposalsTlogDB) getProposals() error {}
+
+// ProposalsAll fetches the proposals data from the local db.
+//
+// Satisfies the PoliteiaBackend interface.
+func (db *ProposalsTlogDB) ProposalsAll() ([]*pitypes.ProposalInfo, int, error) {
+	var query storm.Query
+
+	// if filterByVoteStatus != 0 {
+	// 	query = db.dbP.Select(q.Eq("VoteStatus",
+	// 		ticketvotev1.VoteStatuses[filterByVoteStatus]))
+	// } else {
+	query = db.dbP.Select()
+	// }
+
+	// Count the proposals based on the query created above.
+	totalCount, err := query.Count(&pitypes.ProposalInfo{})
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// Return the proposals listing starting with the newest.
+	var proposals []*pitypes.ProposalInfo
+	err = query.Skip(offset).Limit(rowsCount).Reverse().OrderBy("Timestamp").
+		Find(&proposals)
+	if err != nil && err != storm.ErrNotFound {
+		log.Errorf("Failed to fetch data from Proposals DB: %v", err)
+	} else {
+		err = nil
+	}
+	var proposals []pitypes.ProposalInfo
+	err := db.
+
+	return proposals, totalCount, nil
+}
 
 func (db *ProposalsTlogDB) ProposalsCheckUpdates() error {
 	// Sanity check
