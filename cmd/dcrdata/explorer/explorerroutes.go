@@ -1915,13 +1915,12 @@ func (exp *explorerUI) Search(w http.ResponseWriter, r *http.Request) {
 	// Execute search for proposals by both RefID and proposal token before
 	// the address search because most search strings with alphanumeric
 	// characters are interprated as addresses.
-	if exp.proposalsGit != nil {
+	if exp.proposals != nil {
 		// Check if the search term references a proposal token exists.
-		proposalInfo, err := exp.proposalsGit.ProposalByToken(searchStr)
-
+		proposalInfo, err := exp.proposals.ProposalByToken(searchStr)
 		if err != nil {
-			// Check if the search term references a proposal RefID exists.
-			proposalInfo, err = exp.proposalsGit.ProposalByRefID(searchStr)
+			// how to properly handle error here?
+			return
 		}
 		if err == nil {
 			http.Redirect(w, r, "/proposal/"+proposalInfo.Token, http.StatusPermanentRedirect)
@@ -2236,7 +2235,7 @@ func (exp *explorerUI) AgendasPage(w http.ResponseWriter, r *http.Request) {
 
 // ProposalPage is the page handler for the "/proposal" path.
 func (exp *explorerUI) ProposalPage(w http.ResponseWriter, r *http.Request) {
-	if exp.proposalsGit == nil {
+	if exp.proposals == nil {
 		errMsg := "Remove the disable-piparser flag to activate it."
 		log.Errorf("proposal page is disabled. %s", errMsg)
 		exp.StatusPage(w, errMsg, fmt.Sprintf(pageDisabledCode, "/proposals"), "", ExpStatusPageDisabled)
@@ -2245,11 +2244,11 @@ func (exp *explorerUI) ProposalPage(w http.ResponseWriter, r *http.Request) {
 
 	// Attempts to retrieve a proposal refID from the URL path.
 	param := getProposalTokenCtx(r)
-	proposalInfo, err := exp.proposalsGit.ProposalByRefID(param)
+	proposalInfo, err := exp.proposals.ProposalByToken(param)
 	if err != nil {
 		// Check if the URL parameter passed is a proposal token and attempt to
 		// fetch its data.
-		proposalInfo, newErr := exp.proposalsGit.ProposalByToken(param)
+		proposalInfo, newErr := exp.proposals.ProposalByToken(param)
 		if newErr == nil && proposalInfo != nil {
 			// redirect to a human readable url (replace the token with the RefID)
 			http.Redirect(w, r, "/proposal/"+proposalInfo.Token, http.StatusPermanentRedirect)
@@ -2288,7 +2287,7 @@ func (exp *explorerUI) ProposalPage(w http.ResponseWriter, r *http.Request) {
 
 // ProposalsPage is the page handler for the "/proposals" path.
 func (exp *explorerUI) ProposalsPage(w http.ResponseWriter, r *http.Request) {
-	if exp.proposalsGit == nil {
+	if exp.proposals == nil {
 		errMsg := "Remove the disable-piparser flag to activate it."
 		log.Errorf("proposals page is disabled. %s", errMsg)
 		exp.StatusPage(w, errMsg, fmt.Sprintf(pageDisabledCode, "/proposals"), "", ExpStatusPageDisabled)
@@ -2331,10 +2330,10 @@ func (exp *explorerUI) ProposalsPage(w http.ResponseWriter, r *http.Request) {
 
 	// Check if filter by votes status query parameter was passed.
 	if filterBy > 0 {
-		proposals, count, err = exp.proposalsGit.AllProposals(int(offset),
+		proposals, count, err = exp.proposals.ProposalsAll(int(offset),
 			int(rowsCount), int(filterBy))
 	} else {
-		proposals, count, err = exp.proposalsGit.AllProposals(int(offset),
+		proposals, count, err = exp.proposals.ProposalsAll(int(offset),
 			int(rowsCount))
 	}
 
@@ -2365,8 +2364,8 @@ func (exp *explorerUI) ProposalsPage(w http.ResponseWriter, r *http.Request) {
 		VStatusFilter:  int(filterBy),
 		TotalCount:     int64(count),
 		PoliteiaURL:    exp.politeiaAPIURL,
-		LastVotesSync:  exp.dataSource.LastPiParserSync().UTC().Unix(),
-		LastPropSync:   exp.proposalsGit.LastProposalsSync(),
+		LastVotesSync:  exp.dataSource.LastPiParserSync().UTC().Unix(), // nts: probably not needed anymore
+		LastPropSync:   exp.proposals.ProposalsLastSync(),
 		TimePerBlock:   int64(exp.ChainParams.TargetTimePerBlock.Seconds()),
 	})
 

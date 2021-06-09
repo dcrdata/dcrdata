@@ -65,7 +65,7 @@ func TestStatusPageResponseCodes(t *testing.T) {
 		XcBot:         nil,
 		Tracker:       nil,
 		AgendasSource: nil,
-		ProposalsGit:  nil,
+		Proposals:     nil,
 		PoliteiaURL:   "",
 		MainnetLink:   "/",
 		TestnetLink:   "/",

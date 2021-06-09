@@ -26,8 +26,7 @@ import (
 	"github.com/decred/dcrdata/db/dcrpg/v6"
 	"github.com/decred/dcrdata/exchanges/v3"
 	"github.com/decred/dcrdata/gov/v4/agendas"
-	"github.com/decred/dcrdata/gov/v4/politeia"
-	"github.com/decred/dcrdata/gov/v4/politeia/tlog"
+	politeia "github.com/decred/dcrdata/gov/v4/politeia/tlog"
 
 	"github.com/decred/dcrdata/v6/blockdata"
 	"github.com/decred/dcrdata/v6/db/cache"
@@ -101,20 +100,6 @@ func _main(ctx context.Context) error {
 
 	// Display app version.
 	log.Infof("%s version %v (Go version %s)", AppName, Version(), runtime.Version())
-
-	fmt.Println("--------------- me ---------------")
-	proposalsTlog, err := tlog.NewProposalsTlogDB(cfg.PoliteiaAPIURL,
-		filepath.Join(cfg.DataDir, "proposalstlog.db"))
-	if err != nil {
-		return fmt.Errorf("failed to create new proposals db instance: %v", err)
-	}
-	err = proposalsTlog.ProposalsCheckUpdates()
-	if err != nil {
-		fmt.Println("err !!")
-		fmt.Println(err)
-		return err
-	}
-	fmt.Println("--------------- em ---------------")
 
 	// Grab a Notifier. After all databases are synced, register handlers with
 	// the Register*Group methods, set the best block height with
@@ -482,10 +467,10 @@ func _main(ctx context.Context) error {
 	// data stored in github repositories away from the decred blockchain. It also
 	// creates a new http client needed to query Politeia API endpoints.
 	// When piparser is disabled, disable the API calls too.
-	var proposalsInstance explorer.PoliteiaBackend
+	var proposalsInstance explorer.PoliteiaTlogBackend
 
 	if !cfg.DisablePiParser {
-		proposalsInstance, err = politeia.NewProposalsDB(cfg.PoliteiaAPIURL,
+		proposalsInstance, err = politeia.NewProposalsTlogDB(cfg.PoliteiaAPIURL,
 			filepath.Join(cfg.DataDir, cfg.ProposalsFileName))
 		if err != nil {
 			return fmt.Errorf("failed to create new proposals db instance: %v", err)
@@ -518,8 +503,7 @@ func _main(ctx context.Context) error {
 		XcBot:         xcBot,
 		AgendasSource: agendaDB,
 		Tracker:       tracker,
-		ProposalsGit:  proposalsInstance,
-		ProposalsTlog: proposalsTlog,
+		Proposals:     proposalsInstance,
 		PoliteiaURL:   cfg.PoliteiaAPIURL,
 		MainnetLink:   cfg.MainnetLink,
 		TestnetLink:   cfg.TestnetLink,
@@ -1058,7 +1042,7 @@ func _main(ctx context.Context) error {
 		// Proposal db update is made asynchronously to ensure that the system works
 		// even when the Politeia API endpoint set is down.
 		go func() {
-			if err := proposalsInstance.CheckProposalsUpdates(); err != nil {
+			if err := proposalsInstance.ProposalsCheckUpdates(); err != nil {
 				log.Errorf("updating proposals db failed: %v", err)
 			}
 		}()
