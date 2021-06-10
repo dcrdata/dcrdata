@@ -32,6 +32,7 @@ import (
 	"github.com/decred/dcrdata/v6/db/dbtypes"
 	"github.com/decred/dcrdata/v6/explorer/types"
 	"github.com/decred/dcrdata/v6/txhelpers"
+	ticketvotev1 "github.com/decred/politeia/politeiawww/api/ticketvote/v1"
 
 	humanize "github.com/dustin/go-humanize"
 )
@@ -2244,6 +2245,7 @@ func (exp *explorerUI) ProposalPage(w http.ResponseWriter, r *http.Request) {
 
 	// Attempts to retrieve a proposal refID from the URL path.
 	param := getProposalTokenCtx(r)
+	// nts: REVIEW THIS LOGIC
 	proposalInfo, err := exp.proposals.ProposalByToken(param)
 	if err != nil {
 		// Check if the URL parameter passed is a proposal token and attempt to
@@ -2343,30 +2345,41 @@ func (exp *explorerUI) ProposalsPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	fmt.Println("PROVIDING THE PROPOSALS PAGE DATA")
+	fmt.Println(proposals)
+	for _, p := range proposals {
+		fmt.Println(p.Name)
+		fmt.Println(p.Token)
+		fmt.Println(p.VoteStatus)
+	}
+
+	fmt.Println("ticketvotev1.VoteStatuses")
+	fmt.Println(ticketvotev1.VoteStatuses)
+
 	str, err := exp.templates.exec("proposals", struct {
 		*CommonPageData
 		Proposals     []*pitypes.ProposalInfo
-		VotesStatus   map[pitypes.VoteStatusType]string
+		VotesStatus   map[ticketvotev1.VoteStatusT]string
 		VStatusFilter int
 		Offset        int64
 		Limit         int64
 		TotalCount    int64
 		PoliteiaURL   string
-		LastVotesSync int64
-		LastPropSync  int64
-		TimePerBlock  int64
+		// LastVotesSync int64
+		LastPropSync int64
+		TimePerBlock int64
 	}{
 		CommonPageData: exp.commonData(r),
 		Proposals:      proposals,
-		VotesStatus:    pitypes.VotesStatuses(),
+		VotesStatus:    ticketvotev1.VoteStatuses,
 		Offset:         int64(offset),
 		Limit:          int64(rowsCount),
 		VStatusFilter:  int(filterBy),
 		TotalCount:     int64(count),
 		PoliteiaURL:    exp.politeiaAPIURL,
-		LastVotesSync:  exp.dataSource.LastPiParserSync().UTC().Unix(), // nts: probably not needed anymore
-		LastPropSync:   exp.proposals.ProposalsLastSync(),
-		TimePerBlock:   int64(exp.ChainParams.TargetTimePerBlock.Seconds()),
+		// LastVotesSync:  exp.dataSource.LastPiParserSync().UTC().Unix(), // nts: probably not needed anymore
+		LastPropSync: exp.proposals.ProposalsLastSync(),
+		TimePerBlock: int64(exp.ChainParams.TargetTimePerBlock.Seconds()),
 	})
 
 	if err != nil {

@@ -59,7 +59,7 @@ func proposalMetadataDecode(fs []recordsv1.File) (*piv1.ProposalMetadata, error)
 
 // statusChangeMetadataDecode returns the published, censored and abandoned
 // dates from status change metadata streams.
-func statusChangeMetadataDecode(md []recordsv1.MetadataStream) ([]int64, string, error) {
+func statusChangeMetadataDecode(md []recordsv1.MetadataStream) ([]uint64, string, error) {
 	var (
 		statuses = make([]umplugin.StatusChangeMetadata, 0, 16)
 	)
@@ -105,9 +105,9 @@ func statusChangeMetadataDecode(md []recordsv1.MetadataStream) ([]int64, string,
 		}
 	}
 
-	return []int64{
-		publishedAt,
-		censoredAt,
-		abandonedAt,
+	return []uint64{
+		uint64(publishedAt),
+		uint64(censoredAt),
+		uint64(abandonedAt),
 	}, changeMsg, nil
 }

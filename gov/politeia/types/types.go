@@ -33,18 +33,20 @@ type ProposalInfo struct {
 	UserID string `json:"userid"`
 
 	// Comments data
-	CommentsCount uint32 `json:"commentscount`
+	CommentsCount int32 `json:"commentscount`
 
 	// Ticketvote data
 	VoteStatus       ticketvotev1.VoteStatusT  `json:"votestatus"`
 	VoteResults      []ticketvotev1.VoteResult `json:"voteresults"`
 	StatusChangeMsg  string                    `json:"statuschangemsg"`
+	EligibleTickets  uint32                    `json:"eligibletickets"`
 	StartBlockHeight uint32                    `json:"startblockheight"`
 	EndBlockHeight   uint32                    `json:"endblockheight"`
-	EligibleTickets  uint32                    `json:"eligibletickets"`
 	QuorumPercentage uint32                    `json:"quorumpercentage"`
 	PassPercentage   uint32                    `json:"passpercentage"`
-	TotalVotes       int64                     `json:"totalvotes"`
+
+	// not used anywhere? check
+	TotalVotes uint64 `json:"totalvotes"`
 
 	// Timestamps
 	PublishedAt uint64 `json:"publishedat" storm:"index"`
@@ -153,26 +155,22 @@ func (p ProposalStatusType) String() string {
 
 // VoteStatusType defines the various vote statuses available as referenced in
 // https://github.com/decred/politeia/blob/master/politeiawww/api/www/v1/v1.go
-type VoteStatusType piapi.PropVoteStatusT
+type VoteStatusType ticketvotev1.VoteStatusT
 
 // ShorterDesc maps the short description to there respective vote status type.
-var ShorterDesc = map[piapi.PropVoteStatusT]string{
-	piapi.PropVoteStatusInvalid:       "Invalid",
-	piapi.PropVoteStatusNotAuthorized: "Not Authorized",
-	piapi.PropVoteStatusAuthorized:    "Authorized",
-	piapi.PropVoteStatusStarted:       "Started",
-	piapi.PropVoteStatusFinished:      "Finished",
-	piapi.PropVoteStatusDoesntExist:   "Doesn't Exist",
+var ShorterDesc = map[ticketvotev1.VoteStatusT]string{
+	ticketvotev1.VoteStatusInvalid:      "Invalid",
+	ticketvotev1.VoteStatusUnauthorized: "Unauthorized",
+	ticketvotev1.VoteStatusAuthorized:   "Authorized",
+	ticketvotev1.VoteStatusStarted:      "Started",
+	ticketvotev1.VoteStatusFinished:     "Finished",
+	ticketvotev1.VoteStatusApproved:     "Approved",
+	ticketvotev1.VoteStatusRejected:     "Rejected",
 }
 
 // ShortDesc returns the shorter vote status description.
 func (s VoteStatusType) ShortDesc() string {
-	return ShorterDesc[piapi.PropVoteStatusT(s)]
-}
-
-// LongDesc returns the long vote status description.
-func (s VoteStatusType) LongDesc() string {
-	return piapi.PropVoteStatus[piapi.PropVoteStatusT(s)]
+	return ShorterDesc[ticketvotev1.VoteStatusT(s)]
 }
 
 // ProposalStateType defines the proposal state entry.
@@ -244,8 +242,7 @@ func ProposalStateFromStr(val string) ProposalStateType {
 func VotesStatuses() map[VoteStatusType]string {
 	m := make(map[VoteStatusType]string)
 	for k, val := range ShorterDesc {
-		if k == piapi.PropVoteStatusInvalid ||
-			k == piapi.PropVoteStatusDoesntExist {
+		if k == ticketvotev1.VoteStatusInvalid {
 			continue
 		}
 		m[VoteStatusType(k)] = val
@@ -253,17 +250,22 @@ func VotesStatuses() map[VoteStatusType]string {
 	return m
 }
 
+func (pi ProposalInfo) VoteStatusDesc() string {
+	return ticketvotev1.VoteStatuses[pi.VoteStatus]
+}
+
 // IsEqual compares CensorshipRecord, Name, State, NumComments, StatusChangeMsg,
 // Timestamp, CensoredDate, AbandonedDate, PublishedDate, Token, VoteStatus,
 // TotalVotes and count of VoteResults between the two ProposalsInfo structs passed.
-func (pi *ProposalInfo) IsEqual(b *ProposalInfo) bool {
+// nts: update comment
+func (pi *ProposalInfo) IsEqual(b ProposalInfo) bool {
 	if pi.Token != b.Token || pi.Name != b.Name || pi.State != b.State ||
 		pi.CommentsCount != b.CommentsCount ||
-		// pi.StatusChangeMsg != b.StatusChangeMsg ||
+		pi.StatusChangeMsg != b.StatusChangeMsg ||
 		pi.Status != b.Status || pi.Timestamp != b.Timestamp ||
-		pi.CensoredAt != b.CensoredAt || pi.AbandonedAt != b.AbandonedAt ||
 		pi.VoteStatus != b.VoteStatus || pi.TotalVotes != b.TotalVotes ||
-		pi.PublishedAt != b.PublishedAt || len(pi.VoteResults) != len(b.VoteResults) {
+		pi.PublishedAt != b.PublishedAt ||
+		pi.CensoredAt != b.CensoredAt || pi.AbandonedAt != b.AbandonedAt {
 		return false
 	}
 	return true
@@ -272,21 +274,21 @@ func (pi *ProposalInfo) IsEqual(b *ProposalInfo) bool {
 // ProposalMetadata contains some status-dependent data representations for
 // display purposes.
 type ProposalMetadata struct {
-	// The start height of the vote. The end height is already part of the
-	// ProposalInfo struct.
-	StartHeight int64
 	// Time until start for "Authorized" proposals, Time until done for "Started"
 	// proposals.
-	SecondsTil     int64
-	IsPassing      bool
-	Approval       float32
-	Rejection      float32
-	Yes            int64
-	No             int64
-	VoteCount      int64
-	QuorumCount    int64
-	QuorumAchieved bool
-	PassPercent    float32
+	SecondsTil         int64
+	IsPassing          bool
+	Approval           float32
+	Rejection          float32
+	Yes                int64
+	No                 int64
+	VoteCount          int64
+	QuorumCount        int64
+	QuorumAchieved     bool
+	PassPercent        float32
+	VoteStatusDesc     string
+	ProposalStateDesc  string
+	ProposalStatusDesc string
 }
 
 // Metadata performs some common manipulations of the ProposalInfo data to
@@ -295,10 +297,9 @@ type ProposalMetadata struct {
 // arguments.
 func (pi *ProposalInfo) Metadata(tip, targetBlockTime int64) *ProposalMetadata {
 	meta := new(ProposalMetadata)
-	desc := ticketvotev1.VoteStatuses[pi.VoteStatus]
-	switch desc {
-	case "Started", "Finished":
-		meta.StartHeight = int64(pi.EndBlockHeight) - windowSize
+	// desc := ticketvotev1.VoteStatuses[pi.VoteStatus]
+	switch pi.VoteStatus {
+	case ticketvotev1.VoteStatusStarted, ticketvotev1.VoteStatusFinished:
 		for _, count := range pi.VoteResults {
 			switch count.ID {
 			case "yes":
@@ -318,10 +319,13 @@ func (pi *ProposalInfo) Metadata(tip, targetBlockTime int64) *ProposalMetadata {
 			meta.Rejection = 1 - meta.Approval
 		}
 		meta.IsPassing = meta.Approval > meta.PassPercent
-		if desc == "Started" {
+		if pi.VoteStatus == ticketvotev1.VoteStatusStarted {
 			blocksLeft := int64(pi.EndBlockHeight) - tip
 			meta.SecondsTil = blocksLeft * targetBlockTime
 		}
 	}
+	meta.VoteStatusDesc = ticketvotev1.VoteStatuses[pi.VoteStatus]
+	meta.ProposalStateDesc = recordsv1.RecordStates[pi.State]
+	meta.ProposalStatusDesc = recordsv1.RecordStatuses[pi.Status]
 	return meta
 }

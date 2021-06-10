@@ -601,7 +601,8 @@ func (exp *explorerUI) Store(blockData *blockdata.BlockData, msgBlock *wire.MsgB
 	// to mine, then 12 blocks take approximately 1hr.
 	// https://docs.decred.org/advanced/navigating-politeia-data/#voting-and-comment-data
 	fmt.Println("in explorerUi.Store; block height at point of update?")
-	if newBlockData.Height%12 == 0 && exp.proposals != nil {
+
+	if (newBlockData.Height%12 == 0) && exp.proposals != nil {
 		// Update the proposal DB. This is run asynchronously since it involves
 		// a query to Politeia (a remote system) and we do not want to block
 		// execution.

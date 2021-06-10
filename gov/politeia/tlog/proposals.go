@@ -36,7 +36,10 @@ var (
 )
 
 // dbinfo defines the property that holds the db version.
-const dbinfo = "_proposalstlog.db_"
+const dbinfo = "_proposals.db_"
+
+// TODO: remove tlog from namings (?)
+// TODO: reorganize functions order on this file
 
 // ProposalsTlogDB defines the common data needed to query the proposals db.
 type ProposalsTlogDB struct {
@@ -92,7 +95,7 @@ func NewProposalsTlogDB(politeiaURL, dbPath string) (*ProposalsTlogDB, error) {
 		if err != nil {
 			return nil, err
 		}
-		log.Infof("proposalstlog.db version %v was set", dbVersion)
+		log.Infof("proposals.db version %v was set", dbVersion)
 	}
 
 	// Use https cert from config. If does not exist, create new one.
@@ -254,28 +257,6 @@ func (db *ProposalsTlogDB) fetchRecordDetails(tokens []string) (map[string]recor
 	return records, nil
 }
 
-func (db *ProposalsTlogDB) fetchRecordCommentCounts(tokens []string) (map[string]uint32, error) {
-	countReq := commentsv1.Count{
-		Tokens: tokens,
-	}
-	cr, err := db.client.CommentCount(countReq)
-	if err != nil {
-		return nil, err
-	}
-	return cr.Counts, err
-}
-
-func (db *ProposalsTlogDB) fetchRecordVoteSummaries(tokens []string) (map[string]ticketvotev1.Summary, error) {
-	summariesReq := ticketvotev1.Summaries{
-		Tokens: tokens,
-	}
-	sr, err := db.client.TicketVoteSummaries(summariesReq)
-	if err != nil {
-		return nil, err
-	}
-	return sr.Summaries, nil
-}
-
 // fetchAndParseVettedProposals returns the parsed vetted proposals from
 // politeia API's. .It also cooks up the data needed tos save the proposals in
 // storm db.It first fetches the token inventory for the vetted proposals,
@@ -285,7 +266,7 @@ func (db *ProposalsTlogDB) fetchRecordVoteSummaries(tokens []string) (map[string
 // fetchAPIData functionality
 // nts: improve comment
 // nts: proceed to break this func in smaller ones if needed
-func (db *ProposalsTlogDB) fetchProposalsData(tokens []string) ([]pitypes.ProposalInfo, error) {
+func (db *ProposalsTlogDB) fetchProposalsData(tokens []string) ([]*pitypes.ProposalInfo, error) {
 	// Fetch record details for each token from the inventory
 	recordDetails, err := db.fetchRecordDetails(tokens)
 	if err != nil {
@@ -293,18 +274,24 @@ func (db *ProposalsTlogDB) fetchProposalsData(tokens []string) ([]pitypes.Propos
 	}
 
 	// Fetch comments count for each token from the inventory
-	commentsCounts, err := db.fetchRecordCommentCounts(tokens)
+	cr, err := db.client.CommentCount(commentsv1.Count{
+		Tokens: tokens,
+	})
 	if err != nil {
 		return nil, err
 	}
+	commentsCounts := cr.Counts
 
 	// Fetch vote summary for each token from the inventory
-	voteSummaries, err := db.fetchRecordVoteSummaries(tokens)
+	sr, err := db.client.TicketVoteSummaries(ticketvotev1.Summaries{
+		Tokens: tokens,
+	})
 	if err != nil {
 		return nil, err
 	}
+	voteSummaries := sr.Summaries
 
-	var proposals []pitypes.ProposalInfo
+	var proposals []*pitypes.ProposalInfo
 
 	// Go through every vetted record from the inventory and feed
 	// data used by dcrdata
@@ -334,24 +321,24 @@ func (db *ProposalsTlogDB) fetchProposalsData(tokens []string) ([]pitypes.Propos
 		proposal.UserID = um.UserID
 
 		// Comments count
-		proposal.CommentsCount = commentsCounts[record.Token]
+		proposal.CommentsCount = int32(commentsCounts[record.CensorshipRecord.Token])
 
 		// Vote data
 		summary := voteSummaries[proposal.Token]
 		proposal.VoteStatus = summary.Status
 		proposal.VoteResults = summary.Results
+		proposal.EligibleTickets = summary.EligibleTickets
 		proposal.StartBlockHeight = summary.StartBlockHeight
 		proposal.EndBlockHeight = summary.EndBlockHeight
-		proposal.EligibleTickets = summary.EligibleTickets
 		proposal.QuorumPercentage = summary.QuorumPercentage
-		proposal.PassPercent = summary.PassPercentage
+		proposal.PassPercentage = summary.PassPercentage
 
 		// TODO: total votes
 		var totalVotes uint64
 		for _, v := range summary.Results {
 			totalVotes += v.Votes
 		}
-		proposal.totalVotes = totalVotes
+		proposal.TotalVotes = totalVotes
 
 		// Status change metadata
 		ts, changeMsg, err := statusChangeMetadataDecode(record.Metadata)
@@ -364,14 +351,13 @@ func (db *ProposalsTlogDB) fetchProposalsData(tokens []string) ([]pitypes.Propos
 		proposal.AbandonedAt = ts[2]
 		proposal.StatusChangeMsg = changeMsg
 
-
 		fmt.Printf("pulbishedat %s censoredat %s abandonedat %s change msg %s\n",
 			proposal.PublishedAt,
 			proposal.CensoredAt,
 			proposal.AbandonedAt,
 			proposal.StatusChangeMsg,
 		)
-		proposals = append(proposals, proposal)
+		proposals = append(proposals, &proposal)
 	}
 
 	return proposals, nil
@@ -380,9 +366,12 @@ func (db *ProposalsTlogDB) fetchProposalsData(tokens []string) ([]pitypes.Propos
 // saveProposals adds the proposals data to the db.
 //
 // Satisfies the PoliteiaBackend interface.
-func (db *ProposalsTlogDB) saveProposals(proposals []pitypes.ProposalInfo) error {
+func (db *ProposalsTlogDB) saveProposals(proposals []*pitypes.ProposalInfo) error {
 	for _, proposal := range proposals {
 		err := db.dbP.Save(proposal)
+		if err != nil {
+			return err
+		}
 
 		// Check if a duplicate censorship record was detected. If it exists,
 		// it means that the proposal has undergone an update, and it's fixed
@@ -454,7 +443,7 @@ func (db *ProposalsTlogDB) updateInProgressProposals() (int, error) {
 
 		// nft: review if data compared on isEqual is enough to determine a
 		// record update
-		if prop.IsEqual(proposal) {
+		if prop.IsEqual(*proposal) {
 			// No changes made to proposal
 			continue
 		}
@@ -473,20 +462,25 @@ func (db *ProposalsTlogDB) updateInProgressProposals() (int, error) {
 	return countUpdated, nil
 }
 
-func (db *ProposalsTlogDB) getProposals() error {}
-
 // ProposalsAll fetches the proposals data from the local db.
+// The argument filterByVoteStatus is optional.
 //
 // Satisfies the PoliteiaBackend interface.
-func (db *ProposalsTlogDB) ProposalsAll() ([]*pitypes.ProposalInfo, int, error) {
+func (db *ProposalsTlogDB) ProposalsAll(offset, rowsCount int,
+	filterByVoteStatus ...int) ([]*pitypes.ProposalInfo, int, error) {
+	// Sanity check
+	if db == nil || db.dbP == nil {
+		return nil, 0, errDef
+	}
+
 	var query storm.Query
 
-	// if filterByVoteStatus != 0 {
-	// 	query = db.dbP.Select(q.Eq("VoteStatus",
-	// 		ticketvotev1.VoteStatuses[filterByVoteStatus]))
-	// } else {
-	query = db.dbP.Select()
-	// }
+	if len(filterByVoteStatus) > 0 {
+		query = db.dbP.Select(q.Eq("VoteStatus",
+			ticketvotev1.VoteStatusT(filterByVoteStatus[0])))
+	} else {
+		query = db.dbP.Select()
+	}
 
 	// Count the proposals based on the query created above.
 	totalCount, err := query.Count(&pitypes.ProposalInfo{})
@@ -503,12 +497,12 @@ func (db *ProposalsTlogDB) ProposalsAll() ([]*pitypes.ProposalInfo, int, error) 
 	} else {
 		err = nil
 	}
-	var proposals []pitypes.ProposalInfo
-	err := db.
 
 	return proposals, totalCount, nil
 }
 
+// ProposalsCheckUpdates is the function responsible for keeping an up-to-date
+// database synced with politeia's latest updates. It ....
 func (db *ProposalsTlogDB) ProposalsCheckUpdates() error {
 	// Sanity check
 	if db == nil || db.dbP == nil {
@@ -517,36 +511,86 @@ func (db *ProposalsTlogDB) ProposalsCheckUpdates() error {
 
 	// Save the timestamp of the last update check
 	defer atomic.StoreInt64(&db.lastSync, time.Now().UTC().Unix())
-	// for fetching -> atomic.LoadInt64(&db.lastSync)
-
-	// Fetch all vetted tokens from inventory
-	vettedTokens, err := db.fetchVettedTokensInventory()
-	if err != nil {
-		return err
-	}
-
-	// Fetch all vetted proposals data from inventory
-	proposals, err := db.fetchProposalsData(vettedTokens)
-	if err != nil {
-		fmt.Println(err)
-		return err
-	}
-
-	fmt.Println("After proposals check updates")
-	fmt.Println(proposals)
 
 	// Update all current proposals whose vote statuses is either
-	// NotAuthorized, Authorized and Started, and that has undergone
+	// unauthorized, authorized and started, and that has undergone
 	// some data change.
 	updatedCount, err := db.updateInProgressProposals()
 	if err != nil {
 		return err
 	}
 
-	// Retrieve and update any new
+	// TODO: order proposals from DB in last status change timestamp, Timestamp field in Record.
+	var proposals []*pitypes.ProposalInfo
+	err = db.dbP.All(&proposals)
+	if err != nil {
+		return err
+	}
 
-	fmt.Println("updatedCount")
-	fmt.Println(updatedCount)
+	// Is first time fetching proposals?
+	var tokens []string
+	if len(proposals) == 0 {
+		// DB is clean, fetch all proposals
+		vettedTokens, err := db.fetchVettedTokensInventory()
+		if err != nil {
+			return err
+		}
+		tokens = vettedTokens
+	} else {
+		// Fetch first inventory page to search for new proposals
+		inventoryReq := recordsv1.InventoryOrdered{
+			State: recordsv1.RecordStateVetted,
+			Page:  1,
+		}
+		reply, err := db.client.RecordInventoryOrdered(inventoryReq)
+		if err != nil {
+			return err
+		}
+
+		// create proposals map
+		proposalsMap := make(map[string]*pitypes.ProposalInfo, len(proposals))
+		for _, prop := range proposals {
+			proposalsMap[prop.Token] = prop
+		}
+		var tokensProposalsNew []string
+		for _, token := range reply.Tokens {
+			if _, ok := proposalsMap[token]; ok {
+				// All in progress proposals were already updated, continue.
+				continue
+			}
+			// New proposal found
+			tokensProposalsNew = append(tokensProposalsNew, token)
+		}
+		tokens = tokensProposalsNew
+	}
+
+	fmt.Println("checking tokens slice after crazy algo")
+	fmt.Println(tokens)
+
+	// Insert proposals to db, if any
+	var prs []*pitypes.ProposalInfo
+	if len(tokens) > 0 {
+		prs, err = db.fetchProposalsData(tokens)
+		if err != nil {
+			return err
+		}
+	}
+
+	fmt.Println("after fetch any proposal data")
+
+	if len(prs) > 0 {
+		err = db.saveProposals(prs)
+		if err != nil {
+			return err
+		}
+	}
+
+	fmt.Println("after saveProposal")
+
+	fmt.Println(len(prs) + updatedCount)
+
+	log.Infof("%d politeia proposal DB records were updated",
+		int(len(prs)+updatedCount))
 
 	return nil
 }

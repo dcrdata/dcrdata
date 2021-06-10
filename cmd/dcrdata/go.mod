@@ -25,6 +25,7 @@ require (
 	github.com/decred/dcrdata/exchanges/v3 v3.0.0
 	github.com/decred/dcrdata/gov/v4 v4.0.0
 	github.com/decred/dcrdata/v6 v6.0.0
+	github.com/decred/politeia v1.0.1
 	github.com/decred/slog v1.1.0
 	github.com/didip/tollbooth/v6 v6.1.0
 	github.com/dmigwi/go-piparser/proposals v0.0.0-20191219171828-ae8cbf4067e1

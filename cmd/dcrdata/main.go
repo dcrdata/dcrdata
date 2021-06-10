@@ -158,6 +158,7 @@ func _main(ctx context.Context) error {
 
 	log.Infof("Loaded StakeDatabase at height %d", stakeDBHeight)
 
+	// nft: No longer needed?
 	var piParser dcrpg.ProposalsFetcher
 	if !cfg.DisablePiParser {
 		log.Infof("Setting up the Politeia's proposals clone repository. Please wait...")
@@ -474,6 +475,11 @@ func _main(ctx context.Context) error {
 			filepath.Join(cfg.DataDir, cfg.ProposalsFileName))
 		if err != nil {
 			return fmt.Errorf("failed to create new proposals db instance: %v", err)
+		}
+
+		err := proposalsInstance.ProposalsCheckUpdates()
+		if err != nil {
+			return fmt.Errorf("failed to check for proposals updates: %v", err)
 		}
 	} else {
 		log.Info("Piparser is disabled. Proposals API has been disabled too")
