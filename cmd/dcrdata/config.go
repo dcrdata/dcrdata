@@ -124,13 +124,10 @@ type config struct {
 	MempoolMaxInterval int `long:"mp-max-interval" description:"The maximum time in seconds between mempool reports (within a couple seconds), regardless of number of new tickets seen." env:"DCRDATA_MEMPOOL_MAX_INTERVAL"`
 	MPTriggerTickets   int `long:"mp-ticket-trigger" description:"The minimum number of new tickets that must be seen to trigger a new mempool report." env:"DCRDATA_MP_TRIGGER_TICKETS"`
 
-	// Politeia/proposals and consensus agendas
+	// Consensus agendas and politeia proposals
 	AgendasDBFileName string `long:"agendadbfile" description:"Agendas DB file name (default is agendas.db)." env:"DCRDATA_AGENDAS_DB_FILE_NAME"`
 	ProposalsFileName string `long:"proposalsdbfile" description:"Proposals DB file name (default is proposals.db)." env:"DCRDATA_PROPOSALS_DB_FILE_NAME"`
 	PoliteiaAPIURL    string `long:"politeiaurl" description:"Defines the root API politeia URL (defaults to https://proposals.decred.org)." env:"DCRDATA_POLITEIA_URL"`
-	PiPropRepoOwner   string `long:"piproposalsowner" description:"Defines the owner to the github repo where Politeia's proposals are pushed." env:"DCRDATA_PI_REPO_OWNER"`
-	PiPropRepoName    string `long:"piproposalsrepo" description:"Defines the name of the github repo where Politeia's proposals are pushed." env:"DCRDATA_PROPS_REPO"`
-	DisablePiParser   bool   `long:"disable-piparser" description:"Disables the piparser tool from running." env:"DCRDATA_DISABLE_PIPARSER"`
 
 	// Caching and optimization.
 	AddrCacheCap     int    `long:"addr-cache-cap" description:"Address cache capacity in bytes." env:"DCRDATA_ADDR_CACHE_CAP"`
@@ -526,8 +523,6 @@ func loadConfig() (*config, error) {
 		activeNet = &netparams.SimNetParams
 		activeChain = chaincfg.SimNetParams()
 		defaultPort = defaultSimnetPort
-		// If on simnet, disable piparser tool automatically.
-		cfg.DisablePiParser = true
 		numNets++
 	}
 	if numNets > 1 {

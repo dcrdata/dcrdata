@@ -4,9 +4,9 @@
 package types
 
 import (
+	"github.com/decred/dcrdata/v6/db/dbtypes"
 	recordsv1 "github.com/decred/politeia/politeiawww/api/records/v1"
 	ticketvotev1 "github.com/decred/politeia/politeiawww/api/ticketvote/v1"
-	piapi "github.com/decred/politeia/politeiawww/api/www/v1"
 )
 
 // Politeia votes occur in 2016 block windows.
@@ -18,7 +18,7 @@ const windowSize = 2016
 type ProposalInfo struct {
 	ID int `json:"id" storm:"id,increment"`
 
-	// Record data
+	// Record API data
 	State     recordsv1.RecordStateT  `json:"state"`
 	Status    recordsv1.RecordStatusT `json:"status"`
 	Token     string                  `json:"token"`
@@ -32,10 +32,10 @@ type ProposalInfo struct {
 	// User metadata
 	UserID string `json:"userid"`
 
-	// Comments data
+	// Comments API data
 	CommentsCount int32 `json:"commentscount`
 
-	// Ticketvote data
+	// Ticketvote API data
 	VoteStatus       ticketvotev1.VoteStatusT  `json:"votestatus"`
 	VoteResults      []ticketvotev1.VoteResult `json:"voteresults"`
 	StatusChangeMsg  string                    `json:"statuschangemsg"`
@@ -45,7 +45,6 @@ type ProposalInfo struct {
 	QuorumPercentage uint32                    `json:"quorumpercentage"`
 	PassPercentage   uint32                    `json:"passpercentage"`
 
-	// not used anywhere? check
 	TotalVotes uint64 `json:"totalvotes"`
 
 	// Timestamps
@@ -54,103 +53,11 @@ type ProposalInfo struct {
 	AbandonedAt uint64 `json:"abandonedat"`
 }
 
-// ProposalInfo holds the proposal details as document here
-// https://github.com/decred/politeia/blob/master/politeiawww/api/www/v1/api.md#user-proposals.
-// It also holds the votes status details. The ID field is auto incremented by
-// the db. A proposal can now be uniquely identified by the RefID value and the
-// the contents on the CensorShipRecord struct.
-// type ProposalInfo struct {
-// 	ID              int                `json:"id" storm:"id,increment"`
-// 	Name            string             `json:"name"`
-// 	State           ProposalStateType  `json:"state"`
-// 	Status          ProposalStatusType `json:"status"`
-// 	Timestamp       uint64             `json:"timestamp"`
-// 	UserID          string             `json:"userid"`
-// 	Username        string             `json:"username"`
-// 	PublicKey       string             `json:"publickey"`
-// 	Signature       string             `json:"signature"`
-// 	Version         string             `json:"version"`
-// 	NumComments     int32              `json:"numcomments"`
-// 	StatusChangeMsg string             `json:"statuschangemessage"`
-// 	PublishedDate   uint64             `json:"publishedat" storm:"index"`
-// 	CensoredDate    uint64             `json:"censoredat"`
-// 	AbandonedDate   uint64             `json:"abandonedat"`
-// 	// RefID was added to create an easily readable part of the URL that helps
-// 	// to reference the proposals details page. Storm db ignores entries with
-// 	// duplicate pk but returns "ErrAlreadyExists" error if the field other than
-// 	// the pk has the tag "unique".
-// 	RefID string `storm:"unique"`
-// 	// "unique" tag helps to detect when a single proposal instance wants to be
-// 	// pushed to the db as two different instances instead of one. This bug
-// 	// happened due to edits made to a proposal title thus new RefID was created.
-// 	CensorshipRecord `json:"censorshiprecord" storm:"unique"`
-// 	ProposalVotes    `json:"votes"`
-// 	// Files           []AttachmentFile   `json:"files"`
-// }
-
-// Proposals defines an array of proposals payload as returned by RouteAllVetted route.
-type Proposals struct {
-	Data []*ProposalInfo `json:"proposals"`
-}
-
-// Proposal defines a proposal payload as returned by RouteProposalDetails route.
-type Proposal struct {
-	Data *ProposalInfo `json:"proposal"`
-}
-
-// CensorshipRecord is an entry that was created when the proposal was submitted.
-// https://github.com/decred/politeia/blob/master/politeiawww/api/www/v1/api.md#censorship-record
-type CensorshipRecord struct {
-	TokenVal   string `json:"token" storm:"unique"`
-	MerkleRoot string `json:"merkle"`
-	Signature  string `json:"signature"`
-}
-
-// AttachmentFile are files and documents submitted as proposal details.
-// https://github.com/decred/politeia/blob/master/politeiawww/api/www/v1/api.md#file
-type AttachmentFile struct {
-	Name      string `json:"name"`
-	MimeType  string `json:"mime"`
-	DigestKey string `json:"digest"`
-	Payload   string `json:"payload"`
-}
-
-// ProposalVotes defines the proposal status (Vote info for the public proposals).
-// https://github.com/decred/politeia/blob/master/politeiawww/api/www/v1/api.md#proposal-vote-status
-type ProposalVotes struct {
-	Token              string         `json:"token"`
-	VoteStatus         VoteStatusType `json:"status"`
-	VoteResults        []Results      `json:"optionsresult"`
-	TotalVotes         int64          `json:"totalvotes"`
-	Endheight          string         `json:"endheight"`
-	NumOfEligibleVotes int64          `json:"numofeligiblevotes"`
-	QuorumPercentage   uint32         `json:"quorumpercentage"`
-	PassPercentage     uint32         `json:"passpercentage"`
-}
-
-// Votes defines a slice of VotesStatuses as returned by RouteAllVoteStatus.
-type Votes struct {
-	Data []ProposalVotes `json:"votesstatus"`
-}
-
-// Results defines the actual vote count info per the votes choices available.
-type Results struct {
-	Option        VoteOption `json:"option"`
-	VotesReceived int64      `json:"votesreceived"`
-}
-
-// VoteOption defines the actual high level vote results for the specific agenda.
-type VoteOption struct {
-	OptionID    string `json:"id"`
-	Description string `json:"description"`
-	Bits        int32  `json:"bits"`
-}
-
-// ProposalStatusType defines the various proposal statuses available in pi API.
-type ProposalStatusType piapi.PropStatusT
-
-func (p ProposalStatusType) String() string {
-	return piapi.PropStatus[piapi.PropStatusT(p)]
+// ProposalsChartData defines the data used to plot proposal votes charts.
+type ProposalsChartData struct {
+	Yes  []uint64          `json:"yes,omitempty"`
+	No   []uint64          `json:"no,omitempty"`
+	Time []dbtypes.TimeDef `json:"time,omitempty"`
 }
 
 // VoteStatusType defines the various vote statuses available as referenced in
@@ -171,70 +78,6 @@ var ShorterDesc = map[ticketvotev1.VoteStatusT]string{
 // ShortDesc returns the shorter vote status description.
 func (s VoteStatusType) ShortDesc() string {
 	return ShorterDesc[ticketvotev1.VoteStatusT(s)]
-}
-
-// ProposalStateType defines the proposal state entry.
-type ProposalStateType int8
-
-const (
-	// InvalidState defines the invalid state proposals.
-	InvalidState ProposalStateType = iota
-
-	// UnvettedState defines the unvetted state proposals and includes proposals
-	// with a status of:
-	//   * PropStatusNotReviewed
-	//   * PropStatusUnreviewedChanges
-	//   * PropStatusCensored
-	UnvettedState
-
-	// VettedState defines the vetted state proposals and includes proposals
-	// with a status of:
-	//   * PropStatusPublic
-	//   * PropStatusAbandoned
-	VettedState
-
-	// UnknownState indicates a proposal state that is unrecognized.
-	UnknownState
-)
-
-func (f ProposalStateType) String() string {
-	switch f {
-	case InvalidState:
-		return "invalid"
-	case UnvettedState:
-		return "unvetted"
-	case VettedState:
-		return "vetted"
-	default:
-		return "unknown"
-	}
-}
-
-func RecordStateToProposalState(rs recordsv1.RecordStateT) ProposalStateType {
-	switch rs {
-	case recordsv1.RecordStateInvalid:
-		return InvalidState
-	case recordsv1.RecordStateUnvetted:
-		return UnvettedState
-	case recordsv1.RecordStateVetted:
-		return VettedState
-	default:
-		return UnknownState
-	}
-}
-
-// ProposalStateFromStr converts the string into ProposalStateType value.
-func ProposalStateFromStr(val string) ProposalStateType {
-	switch val {
-	case "invalid":
-		return InvalidState
-	case "unvetted":
-		return UnvettedState
-	case "vetted":
-		return VettedState
-	default:
-		return UnknownState
-	}
 }
 
 // VotesStatuses returns the ShorterDesc map contents exclusive of Invalid and

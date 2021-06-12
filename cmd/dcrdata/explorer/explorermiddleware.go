@@ -27,7 +27,7 @@ const (
 	ctxTxInOutId
 	ctxAddress
 	ctxAgendaId
-	ctxProposalRefID
+	ctxProposalRefID // needs to change to token
 )
 
 const (

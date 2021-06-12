@@ -32,6 +32,7 @@ import (
 	m "github.com/decred/dcrdata/cmd/dcrdata/middleware"
 	"github.com/decred/dcrdata/exchanges/v3"
 	"github.com/decred/dcrdata/gov/v4/agendas"
+	pitypes "github.com/decred/dcrdata/gov/v4/politeia/types"
 	apitypes "github.com/decred/dcrdata/v6/api/types"
 	"github.com/decred/dcrdata/v6/db/cache"
 	"github.com/decred/dcrdata/v6/db/dbtypes"
@@ -69,7 +70,9 @@ type DataSource interface {
 	Height() int64
 	AllAgendas() (map[string]dbtypes.MileStone, error)
 	GetTicketInfo(txid string) (*apitypes.TicketInfo, error)
-	ProposalVotes(proposalToken string) (*dbtypes.ProposalChartsData, error)
+	// TODO: check if needed. porposalsTlog instance is going to appContext for retrieving
+	// charts data
+	// ProposalVotes(proposalToken string) (*dbtypes.ProposalChartsData, error)
 	PowerlessTickets() (*apitypes.PowerlessTickets, error)
 	GetStakeInfoExtendedByHash(hash string) *apitypes.StakeInfoExtended
 	GetStakeInfoExtendedByHeight(idx int) *apitypes.StakeInfoExtended
@@ -110,13 +113,14 @@ type DataSource interface {
 
 // dcrdata application context used by all route handlers
 type appContext struct {
-	nodeClient   *rpcclient.Client
-	Params       *chaincfg.Params
-	DataSource   DataSource
-	Status       *apitypes.Status
-	xcBot        *exchanges.ExchangeBot
-	AgendaDB     *agendas.AgendaDB
-	maxCSVAddrs  int
+	nodeClient  *rpcclient.Client
+	Params      *chaincfg.Params
+	DataSource  DataSource
+	Status      *apitypes.Status
+	xcBot       *exchanges.ExchangeBot
+	AgendaDB    *agendas.AgendaDB
+	maxCSVAddrs int
+	// proposals    explorer.PoliteiaTlogBackend
 	charts       *cache.ChartData
 	isPiDisabled bool // is piparser disabled
 }
@@ -132,7 +136,8 @@ type AppContextConfig struct {
 	MaxAddrs           int
 	Charts             *cache.ChartData
 	IsPiparserDisabled bool
-	AppVer             string
+	// Proposals          explorer.PoliteiaTlogBackend
+	AppVer string
 }
 
 // NewContext constructs a new appContext from the RPC client and database, and
@@ -148,14 +153,15 @@ func NewContext(cfg *AppContextConfig) *appContext {
 	}
 
 	return &appContext{
-		nodeClient:   cfg.Client,
-		Params:       cfg.Params,
-		DataSource:   cfg.DataSource,
-		xcBot:        cfg.XcBot,
-		AgendaDB:     cfg.AgendasDBInstance,
-		Status:       apitypes.NewStatus(uint32(nodeHeight), conns, APIVersion, cfg.AppVer, cfg.Params.Name),
-		maxCSVAddrs:  cfg.MaxAddrs,
-		charts:       cfg.Charts,
+		nodeClient:  cfg.Client,
+		Params:      cfg.Params,
+		DataSource:  cfg.DataSource,
+		xcBot:       cfg.XcBot,
+		AgendaDB:    cfg.AgendasDBInstance,
+		Status:      apitypes.NewStatus(uint32(nodeHeight), conns, APIVersion, cfg.AppVer, cfg.Params.Name),
+		maxCSVAddrs: cfg.MaxAddrs,
+		charts:      cfg.Charts,
+		// proposals:    cfg.Proposals,
 		isPiDisabled: cfg.IsPiparserDisabled,
 	}
 }
@@ -1188,28 +1194,31 @@ func (c *appContext) getTicketPoolByDate(w http.ResponseWriter, r *http.Request)
 }
 
 func (c *appContext) getProposalChartData(w http.ResponseWriter, r *http.Request) {
-	if c.isPiDisabled {
-		errMsg := "piparser is disabled."
-		apiLog.Errorf("%s. Remove the disable-piparser flag to activate it.", errMsg)
-		http.Error(w, errMsg, http.StatusServiceUnavailable)
-		return
-	}
+	// TODO: so rewrite this function. ditch proposalVotes from datasource, put in a instance of
+	// tlog db on appContext.
 
-	token := m.GetProposalTokenCtx(r)
-	votesData, err := c.DataSource.ProposalVotes(token)
-	if dbtypes.IsTimeoutErr(err) {
-		apiLog.Errorf("ProposalVotes: %v", err)
-		http.Error(w, "Database timeout.", http.StatusServiceUnavailable)
-		return
-	}
-	if err != nil {
-		apiLog.Errorf("Unable to get proposals votes for token %s : %v", token, err)
-		http.Error(w, http.StatusText(http.StatusUnprocessableEntity),
-			http.StatusUnprocessableEntity)
-		return
-	}
+	// if c.isPiDisabled {
+	// 	errMsg := "piparser is disabled."
+	// 	apiLog.Errorf("%s. Remove the disable-piparser flag to activate it.", errMsg)
+	// 	http.Error(w, errMsg, http.StatusServiceUnavailable)
+	// 	return
+	// }
 
-	writeJSON(w, votesData, m.GetIndentCtx(r))
+	// token := m.GetProposalTokenCtx(r)
+	// // votesData, err := c.DataSource.ProposalVotes(token)
+	// if dbtypes.IsTimeoutErr(err) {
+	// 	apiLog.Errorf("ProposalVotes: %v", err)
+	// 	http.Error(w, "Database timeout.", http.StatusServiceUnavailable)
+	// 	return
+	// }
+	// if err != nil {
+	// 	apiLog.Errorf("Unable to get proposals votes for token %s : %v", token, err)
+	// 	http.Error(w, http.StatusText(http.StatusUnprocessableEntity),
+	// 		http.StatusUnprocessableEntity)
+	// 	return
+	// }
+
+	writeJSON(w, pitypes.ProposalsChartData{}, m.GetIndentCtx(r))
 }
 
 func (c *appContext) getBlockSize(w http.ResponseWriter, r *http.Request) {

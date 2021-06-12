@@ -95,7 +95,6 @@ type explorerDataSource interface {
 	TimeBasedIntervals(timeGrouping dbtypes.TimeBasedGrouping, limit, offset uint64) ([]*dbtypes.BlocksGroupedInfo, error)
 	AgendasVotesSummary(agendaID string) (summary *dbtypes.AgendaSummary, err error)
 	BlockTimeByHeight(height int64) (int64, error)
-	LastPiParserSync() time.Time
 	GetChainParams() *chaincfg.Params
 	GetExplorerBlock(hash string) *types.BlockInfo
 	GetExplorerBlocks(start int, end int) []*types.BlockBasic
@@ -127,6 +126,7 @@ type explorerDataSource interface {
 type PoliteiaTlogBackend interface {
 	ProposalsLastSync() int64
 	ProposalsCheckUpdates() error
+	ProposalsChartData() (*pitypes.ProposalsChartData, error)
 	ProposalsAll(offset, rowsCount int, filterByVoteStatus ...int) ([]*pitypes.ProposalInfo, int, error)
 	ProposalByToken(token string) (*pitypes.ProposalInfo, error)
 }

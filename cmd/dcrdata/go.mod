@@ -28,7 +28,6 @@ require (
 	github.com/decred/politeia v1.0.1
 	github.com/decred/slog v1.1.0
 	github.com/didip/tollbooth/v6 v6.1.0
-	github.com/dmigwi/go-piparser/proposals v0.0.0-20191219171828-ae8cbf4067e1
 	github.com/dustin/go-humanize v1.0.0
 	github.com/go-chi/chi/v5 v5.0.1
 	github.com/go-chi/docgen v1.2.0
