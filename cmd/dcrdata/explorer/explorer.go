@@ -114,21 +114,12 @@ type explorerDataSource interface {
 	Difficulty(timestamp int64) float64
 }
 
-// PoliteiaBackend implements methods that manage proposals db data.
-// type PoliteiaBackend interface {
-// 	LastProposalsSync() int64
-// 	CheckProposalsUpdates() error
-// 	AllProposals(offset, rowsCount int, filterByVoteStatus ...int) (proposals []*pitypes.ProposalInfo, totalCount int, err error)
-// 	ProposalByToken(proposalToken string) (*pitypes.ProposalInfo, error)
-// 	ProposalByRefID(RefID string) (*pitypes.ProposalInfo, error)
-// }
-
-type PoliteiaTlogBackend interface {
+type PoliteiaBackend interface {
 	ProposalsLastSync() int64
-	ProposalsCheckUpdates() error
-	ProposalsChartData() (*pitypes.ProposalsChartData, error)
-	ProposalsAll(offset, rowsCount int, filterByVoteStatus ...int) ([]*pitypes.ProposalInfo, int, error)
-	ProposalByToken(token string) (*pitypes.ProposalInfo, error)
+	ProposalsSync() error
+	ProposalsAll(offset, rowsCount int, filterByVoteStatus ...int) ([]*pitypes.ProposalRecord, int, error)
+	ProposalByToken(token string) (*pitypes.ProposalRecord, error)
+	ProposalChartData(token string) (*pitypes.ProposalChartData, error)
 }
 
 // agendaBackend implements methods that manage agendas db data.
@@ -216,7 +207,7 @@ type explorerUI struct {
 	chartSource      ChartDataSource
 	agendasSource    agendaBackend
 	voteTracker      *agendas.VoteTracker
-	proposals        PoliteiaTlogBackend
+	proposals        PoliteiaBackend
 	dbsSyncing       atomic.Value
 	devPrefetch      bool
 	templates        templates
@@ -295,7 +286,7 @@ type ExplorerConfig struct {
 	XcBot         *exchanges.ExchangeBot
 	AgendasSource agendaBackend
 	Tracker       *agendas.VoteTracker
-	Proposals     PoliteiaTlogBackend
+	Proposals     PoliteiaBackend
 	PoliteiaURL   string
 	MainnetLink   string
 	TestnetLink   string
@@ -597,20 +588,15 @@ func (exp *explorerUI) Store(blockData *blockdata.BlockData, msgBlock *wire.MsgB
 		go exp.voteTracker.Refresh()
 	}
 
-	// Politeia updates happen hourly. Thus, if blocks take 5 minutes on average
-	// to mine, then 12 blocks take approximately 1hr.
-	// https://docs.decred.org/advanced/navigating-politeia-data/#voting-and-comment-data
-	fmt.Println("in explorerUi.Store; block height at point of update?")
-
-	if (newBlockData.Height%12 == 0) && exp.proposals != nil {
+	// Update proposals data every 5 blocks
+	if (newBlockData.Height%5 == 0) && exp.proposals != nil {
 		// Update the proposal DB. This is run asynchronously since it involves
 		// a query to Politeia (a remote system) and we do not want to block
 		// execution.
-		fmt.Println("calling async checkProposalsUpdates")
 		go func() {
-			err := exp.proposals.ProposalsCheckUpdates()
+			err := exp.proposals.ProposalsSync()
 			if err != nil {
-				log.Errorf("(PoliteiaBackend).ProposalsCheckUpdates: %v", err)
+				log.Errorf("(PoliteiaBackend).ProposalsSync: %v", err)
 			}
 		}()
 	}

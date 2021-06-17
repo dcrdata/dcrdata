@@ -261,21 +261,6 @@ func NewAPIRouter(app *appContext, JSONIndent string, useRealIP, compressLarge b
 		http.Error(w, r.URL.RequestURI()+" ain't no country I've ever heard of! (404)", http.StatusNotFound)
 	})
 
-	// if cfg.PrintAPIDirectory {
-	// 	var buf bytes.Buffer
-	// 	json.Indent(&buf, []byte(docgen.JSONRoutesDoc(mux)), "", "\t")
-	// 	buf.WriteTo(os.Stdout)
-
-	// 	fmt.Println(docgen.MarkdownRoutesDoc(mux, docgen.MarkdownOpts{
-	// 		ProjectPath: "github.com/decred/dcrdata/v5",
-	// 		Intro:       "dcrdata HTTP router directory",
-	// 	}))
-	// 	return
-	// }
-
-	// mux.HandleFunc("/directory", APIDirectory)
-	// mux.With(apiDocs(mux)).HandleFunc("/directory", APIDirectory)
-
 	var listRoutePatterns func(routes []chi.Route) []string
 	listRoutePatterns = func(routes []chi.Route) []string {
 		patterns := []string{}

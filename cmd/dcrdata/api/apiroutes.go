@@ -29,6 +29,7 @@ import (
 	"github.com/decred/dcrd/txscript/v3"
 	"github.com/decred/dcrd/wire"
 
+	"github.com/decred/dcrdata/cmd/dcrdata/explorer"
 	m "github.com/decred/dcrdata/cmd/dcrdata/middleware"
 	"github.com/decred/dcrdata/exchanges/v3"
 	"github.com/decred/dcrdata/gov/v4/agendas"
@@ -113,14 +114,14 @@ type DataSource interface {
 
 // dcrdata application context used by all route handlers
 type appContext struct {
-	nodeClient  *rpcclient.Client
-	Params      *chaincfg.Params
-	DataSource  DataSource
-	Status      *apitypes.Status
-	xcBot       *exchanges.ExchangeBot
-	AgendaDB    *agendas.AgendaDB
-	maxCSVAddrs int
-	// proposals    explorer.PoliteiaTlogBackend
+	nodeClient   *rpcclient.Client
+	Params       *chaincfg.Params
+	DataSource   DataSource
+	Status       *apitypes.Status
+	xcBot        *exchanges.ExchangeBot
+	AgendaDB     *agendas.AgendaDB
+	ProposalsDB  *explorer.PoliteiaBackend
+	maxCSVAddrs  int
 	charts       *cache.ChartData
 	isPiDisabled bool // is piparser disabled
 }
@@ -133,11 +134,11 @@ type AppContextConfig struct {
 	DataSource         DataSource
 	XcBot              *exchanges.ExchangeBot
 	AgendasDBInstance  *agendas.AgendaDB
+	ProposalsDB        *explorer.PoliteiaBackend
 	MaxAddrs           int
 	Charts             *cache.ChartData
 	IsPiparserDisabled bool
-	// Proposals          explorer.PoliteiaTlogBackend
-	AppVer string
+	AppVer             string
 }
 
 // NewContext constructs a new appContext from the RPC client and database, and
@@ -153,15 +154,15 @@ func NewContext(cfg *AppContextConfig) *appContext {
 	}
 
 	return &appContext{
-		nodeClient:  cfg.Client,
-		Params:      cfg.Params,
-		DataSource:  cfg.DataSource,
-		xcBot:       cfg.XcBot,
-		AgendaDB:    cfg.AgendasDBInstance,
-		Status:      apitypes.NewStatus(uint32(nodeHeight), conns, APIVersion, cfg.AppVer, cfg.Params.Name),
-		maxCSVAddrs: cfg.MaxAddrs,
-		charts:      cfg.Charts,
-		// proposals:    cfg.Proposals,
+		nodeClient:   cfg.Client,
+		Params:       cfg.Params,
+		DataSource:   cfg.DataSource,
+		xcBot:        cfg.XcBot,
+		AgendaDB:     cfg.AgendasDBInstance,
+		ProposalsDB:  cfg.ProposalsDB,
+		Status:       apitypes.NewStatus(uint32(nodeHeight), conns, APIVersion, cfg.AppVer, cfg.Params.Name),
+		maxCSVAddrs:  cfg.MaxAddrs,
+		charts:       cfg.Charts,
 		isPiDisabled: cfg.IsPiparserDisabled,
 	}
 }
@@ -1197,26 +1198,20 @@ func (c *appContext) getProposalChartData(w http.ResponseWriter, r *http.Request
 	// TODO: so rewrite this function. ditch proposalVotes from datasource, put in a instance of
 	// tlog db on appContext.
 
-	// if c.isPiDisabled {
-	// 	errMsg := "piparser is disabled."
-	// 	apiLog.Errorf("%s. Remove the disable-piparser flag to activate it.", errMsg)
-	// 	http.Error(w, errMsg, http.StatusServiceUnavailable)
-	// 	return
-	// }
+	token := m.GetProposalTokenCtx(r)
 
-	// token := m.GetProposalTokenCtx(r)
-	// // votesData, err := c.DataSource.ProposalVotes(token)
-	// if dbtypes.IsTimeoutErr(err) {
-	// 	apiLog.Errorf("ProposalVotes: %v", err)
-	// 	http.Error(w, "Database timeout.", http.StatusServiceUnavailable)
-	// 	return
-	// }
-	// if err != nil {
-	// 	apiLog.Errorf("Unable to get proposals votes for token %s : %v", token, err)
-	// 	http.Error(w, http.StatusText(http.StatusUnprocessableEntity),
-	// 		http.StatusUnprocessableEntity)
-	// 	return
-	// }
+	votesData, err := c.ProposalsDB.ProposalChartData(token)
+	if dbtypes.IsTimeoutErr(err) {
+		apiLog.Errorf("ProposalVotes: %v", err)
+		http.Error(w, "Database timeout.", http.StatusServiceUnavailable)
+		return
+	}
+	if err != nil {
+		apiLog.Errorf("Unable to get proposals votes for token %s : %v", token, err)
+		http.Error(w, http.StatusText(http.StatusUnprocessableEntity),
+			http.StatusUnprocessableEntity)
+		return
+	}
 
 	writeJSON(w, pitypes.ProposalsChartData{}, m.GetIndentCtx(r))
 }

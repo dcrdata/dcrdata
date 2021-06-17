@@ -9,13 +9,10 @@ import (
 	ticketvotev1 "github.com/decred/politeia/politeiawww/api/ticketvote/v1"
 )
 
-// Politeia votes occur in 2016 block windows.
-const windowSize = 2016
-
-// Proposaln is the struct that holds all politeia data that dcrdata needs.
+// ProposalRecord is the struct that holds all politeia data that dcrdata needs.
 // It is also the object data that we save to the database. It fetches data
 // from three politeia api's: records, comments and ticketvote.
-type ProposalInfo struct {
+type ProposalRecord struct {
 	ID int `json:"id" storm:"id,increment"`
 
 	// Record API data
@@ -23,7 +20,7 @@ type ProposalInfo struct {
 	Status    recordsv1.RecordStatusT `json:"status"`
 	Token     string                  `json:"token"`
 	Version   uint32                  `json:"version"`
-	Timestamp int64                   `json:"timestamp"`
+	Timestamp uint64                  `json:"timestamp"`
 	Username  string                  `json:"username"`
 
 	// Pi metadata
@@ -53,55 +50,16 @@ type ProposalInfo struct {
 	AbandonedAt uint64 `json:"abandonedat"`
 }
 
-// ProposalsChartData defines the data used to plot proposal votes charts.
-type ProposalsChartData struct {
-	Yes  []uint64          `json:"yes,omitempty"`
-	No   []uint64          `json:"no,omitempty"`
+// ProposalChartData defines the data used to plot proposal votes charts.
+type ProposalChartData struct {
+	Yes  uint64            `json:"yes,omitempty"`
+	No   uint64            `json:"no,omitempty"`
 	Time []dbtypes.TimeDef `json:"time,omitempty"`
 }
 
-// VoteStatusType defines the various vote statuses available as referenced in
-// https://github.com/decred/politeia/blob/master/politeiawww/api/www/v1/v1.go
-type VoteStatusType ticketvotev1.VoteStatusT
+// IsEqual compares data between the two ProposalsInfo structs passed.
 
-// ShorterDesc maps the short description to there respective vote status type.
-var ShorterDesc = map[ticketvotev1.VoteStatusT]string{
-	ticketvotev1.VoteStatusInvalid:      "Invalid",
-	ticketvotev1.VoteStatusUnauthorized: "Unauthorized",
-	ticketvotev1.VoteStatusAuthorized:   "Authorized",
-	ticketvotev1.VoteStatusStarted:      "Started",
-	ticketvotev1.VoteStatusFinished:     "Finished",
-	ticketvotev1.VoteStatusApproved:     "Approved",
-	ticketvotev1.VoteStatusRejected:     "Rejected",
-}
-
-// ShortDesc returns the shorter vote status description.
-func (s VoteStatusType) ShortDesc() string {
-	return ShorterDesc[ticketvotev1.VoteStatusT(s)]
-}
-
-// VotesStatuses returns the ShorterDesc map contents exclusive of Invalid and
-// Doesn't exist statuses.
-func VotesStatuses() map[VoteStatusType]string {
-	m := make(map[VoteStatusType]string)
-	for k, val := range ShorterDesc {
-		if k == ticketvotev1.VoteStatusInvalid {
-			continue
-		}
-		m[VoteStatusType(k)] = val
-	}
-	return m
-}
-
-func (pi ProposalInfo) VoteStatusDesc() string {
-	return ticketvotev1.VoteStatuses[pi.VoteStatus]
-}
-
-// IsEqual compares CensorshipRecord, Name, State, NumComments, StatusChangeMsg,
-// Timestamp, CensoredDate, AbandonedDate, PublishedDate, Token, VoteStatus,
-// TotalVotes and count of VoteResults between the two ProposalsInfo structs passed.
-// nts: update comment
-func (pi *ProposalInfo) IsEqual(b ProposalInfo) bool {
+func (pi *ProposalRecord) IsEqual(b ProposalRecord) bool {
 	if pi.Token != b.Token || pi.Name != b.Name || pi.State != b.State ||
 		pi.CommentsCount != b.CommentsCount ||
 		pi.StatusChangeMsg != b.StatusChangeMsg ||
@@ -134,15 +92,15 @@ type ProposalMetadata struct {
 	ProposalStatusDesc string
 }
 
-// Metadata performs some common manipulations of the ProposalInfo data to
+// Metadata performs some common manipulations of the ProposalRecord data to
 // prepare figures for display. Many of these manipulations require a tip height
 // and a target block time for the network, so those must be provided as
 // arguments.
-func (pi *ProposalInfo) Metadata(tip, targetBlockTime int64) *ProposalMetadata {
+func (pi *ProposalRecord) Metadata(tip, targetBlockTime int64) *ProposalMetadata {
 	meta := new(ProposalMetadata)
-	// desc := ticketvotev1.VoteStatuses[pi.VoteStatus]
 	switch pi.VoteStatus {
-	case ticketvotev1.VoteStatusStarted, ticketvotev1.VoteStatusFinished:
+	case ticketvotev1.VoteStatusStarted, ticketvotev1.VoteStatusFinished,
+		ticketvotev1.VoteStatusApproved, ticketvotev1.VoteStatusRejected:
 		for _, count := range pi.VoteResults {
 			switch count.ID {
 			case "yes":

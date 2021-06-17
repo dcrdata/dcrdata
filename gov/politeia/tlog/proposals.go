@@ -9,7 +9,6 @@ package tlog
 
 import (
 	"fmt"
-	"net/http"
 	"os"
 	"strings"
 	"sync"
@@ -38,11 +37,9 @@ var (
 // dbinfo defines the property that holds the db version.
 const dbinfo = "_proposals.db_"
 
-// TODO: remove tlog from namings (?)
-// TODO: reorganize functions order on this file
-
-// ProposalsTlogDB defines the common data needed to query the proposals db.
-type ProposalsTlogDB struct {
+// ProposalsDB defines the object that interacts with the local proposals
+// db, and with decred's politeia server.
+type ProposalsDB struct {
 	sync.Mutex
 
 	lastSync int64 // atomic
@@ -51,7 +48,7 @@ type ProposalsTlogDB struct {
 	APIPath  string
 }
 
-func NewProposalsTlogDB(politeiaURL, dbPath string) (*ProposalsTlogDB, error) {
+func NewProposalsDB(politeiaURL, dbPath string) (*ProposalsDB, error) {
 	// Validate arguments
 	if politeiaURL == "" {
 		return nil, fmt.Errorf("missing politeia API URL")
@@ -94,106 +91,12 @@ func NewProposalsTlogDB(politeiaURL, dbPath string) (*ProposalsTlogDB, error) {
 		log.Infof("proposals.db version %v was set", dbVersion)
 	}
 
-	// Use https cert from config. If does not exist, create new one.
-
-	// needcert := false
-	// needkey := false
-	// certfile := "/Users/thiagofigueiredo/Library/Application Support/Dcrdata/https.cert"
-	// keyfile := "/Users/thiagofigueiredo/Library/Application Support/Dcrdata/https.key"
-	// if _, err := os.Stat(certfile); err != nil {
-	// 	if os.IsNotExist(err) {
-	// 		needcert = true
-	// 	}
-	// }
-
-	// if _, err := os.Stat(keyfile); err != nil {
-	// 	if os.IsNotExist(err) {
-	// 		needkey = true
-	// 	}
-	// }
-
-	// if needcert && needkey {
-	// 	fmt.Println("need to create tls certs")
-	// 	validUntil := time.Now().Add(10 * 365 * 24 * time.Hour)
-	// 	cert, key, err := certgen.NewTLSCertPair(elliptic.P521(), "politeiawww", validUntil, nil)
-	// 	if err != nil {
-	// 		return nil, err
-	// 	}
-
-	// 	// Write cert and key files.
-	// 	if err = ioutil.WriteFile(certfile, cert, 0666); err != nil {
-	// 		return nil, err
-	// 	}
-	// 	if err = ioutil.WriteFile(keyfile, key, 0600); err != nil {
-	// 		os.Remove(certfile)
-	// 		return nil, err
-	// 	}
-	// }
-
-	// Setup client with cookie jar to make version call
-	// c := &http.Client{
-	// 	Transport: &http.Transport{
-	// 		MaxIdleConns:       10,
-	// 		IdleConnTimeout:    5 * time.Second,
-	// 		DisableCompression: false,
-	// 	},
-	// 	Timeout: 30 * time.Second,
-	// }
-	// jar, err := cookiejar.New(&cookiejar.Options{})
-	// if err != nil {
-	// 	return nil, err
-	// }
-	// c.Jar = jar
-
-	// // Make request
-	// versionRoute := politeiaURL + "/api" + www.PoliteiaWWWAPIRoute + www.RouteVersion
-	// req, err := http.NewRequest(http.MethodGet, versionRoute, nil)
-	// if err != nil {
-	// 	return nil, err
-	// }
-	// req.Header.Add(www.CsrfToken, "")
-	// resp, err := c.Get(versionRoute)
-	// if err != nil || resp == nil {
-	// 	fmt.Println(err)
-	// 	return nil, fmt.Errorf("request failed: %v", err)
-	// }
-	// defer func() {
-	// 	resp.Body.Close()
-	// }()
-
-	// b, err := ioutil.ReadAll(resp.Body)
-	// if err != nil {
-	// 	return nil, err
-	// }
-
-	// var vr www.VersionReply
-	// err = json.Unmarshal(b, &vr)
-	// if err != nil {
-	// 	return nil, fmt.Errorf("unmarshal err: %v", err)
-	// }
-
-	// csrf := resp.Header.Get(www.CsrfToken)
-	// if err != nil {
-	// 	return nil, err
-	// }
-	// fmt.Println(csrf)
-
-	// Create the politeiawww client to interact with the API's.
-	// nts: Opts settings for testing purposes.
-	opts := piclient.Opts{
-		HTTPSCert:  "",
-		Cookies:    []*http.Cookie{},
-		HeaderCSRF: "",
-		Verbose:    true,
-		RawJSON:    false,
-	}
-
-	pc, err := piclient.New(politeiaURL+"/api", opts)
+	pc, err := piclient.New(politeiaURL, piclient.Opts{})
 	if err != nil {
 		return nil, err
 	}
 
-	proposalDB := &ProposalsTlogDB{
+	proposalDB := &ProposalsDB{
 		dbP:     db,
 		client:  pc,
 		APIPath: politeiaURL,
@@ -203,7 +106,7 @@ func NewProposalsTlogDB(politeiaURL, dbPath string) (*ProposalsTlogDB, error) {
 }
 
 // Close closes the proposal DB instance.
-func (db *ProposalsTlogDB) Close() error {
+func (db *ProposalsDB) Close() error {
 	if db == nil || db.dbP == nil {
 		return nil
 	}
@@ -211,9 +114,156 @@ func (db *ProposalsTlogDB) Close() error {
 	return db.dbP.Close()
 }
 
+// ProposalsLastSync reads the last sync timestamp from the atomic db.
+//
+// Satisfies the PoliteiaBackend interface.
+func (db *ProposalsDB) ProposalsLastSync() int64 {
+	return atomic.LoadInt64(&db.lastSync)
+}
+
+// ProposalsSync is responsible for keeping an up-to-date database synced
+// with politeia's latest updates. It first updates the proposals stored
+// in stormdb if there status is considered to be in progress. Then it
+// fetches possible new proposals since last sync, and saves them to stormdb.
+//
+// Satisfies the PoliteiaBackend interface.
+func (db *ProposalsDB) ProposalsSync() error {
+	// Sanity check
+	if db == nil || db.dbP == nil {
+		return errDef
+	}
+
+	// Save the timestamp of the last update check
+	defer atomic.StoreInt64(&db.lastSync, time.Now().UTC().Unix())
+
+	// Update all current proposals whose vote statuses is either
+	// unauthorized, authorized and started, and that has undergone
+	// some data change
+	updatedCount, err := db.proposalsInProgressUpdate()
+	if err != nil {
+		return err
+	}
+
+	// Retrieve proposals from stormdb
+	var proposals []*pitypes.ProposalInfo
+	err = db.dbP.All(&proposals)
+	if err != nil {
+		return err
+	}
+
+	var tokens []string
+	if len(proposals) == 0 {
+		// Empty db so first time fetching proposals, fetch all vetted tokens
+		vettedTokens, err := db.fetchVettedTokensInventory()
+		if err != nil {
+			return err
+		}
+		tokens = vettedTokens
+	} else {
+		// Fetch inventory to search for new proposals
+		inventoryReq := recordsv1.InventoryOrdered{
+			State: recordsv1.RecordStateVetted,
+			Page:  1,
+		}
+		reply, err := db.client.RecordInventoryOrdered(inventoryReq)
+		if err != nil {
+			return err
+		}
+
+		// Create proposals map
+		proposalsMap := make(map[string]*pitypes.ProposalInfo, len(proposals))
+		for _, prop := range proposals {
+			proposalsMap[prop.Token] = prop
+		}
+
+		// Filter new proposals to be fetched
+		var tokensProposalsNew []string
+		for _, token := range reply.Tokens {
+			if _, ok := proposalsMap[token]; ok {
+				// All in progress proposals were already updated, continue
+				continue
+			}
+			// New proposal found
+			tokensProposalsNew = append(tokensProposalsNew, token)
+		}
+		tokens = tokensProposalsNew
+	}
+
+	// Insert proposals to db, if any
+	var prs []*pitypes.ProposalInfo
+	if len(tokens) > 0 {
+		prs, err = db.fetchProposalsData(tokens)
+		if err != nil {
+			return err
+		}
+	}
+
+	if len(prs) > 0 {
+		err = db.proposalsSave(prs)
+		if err != nil {
+			return err
+		}
+	}
+
+	log.Infof("%d politeia records were synced",
+		int(len(prs)+updatedCount))
+
+	return nil
+}
+
+// ProposalsAll fetches the proposals data from the local db.
+// The argument filterByVoteStatus is optional.
+//
+// Satisfies the PoliteiaBackend interface.
+func (db *ProposalsDB) ProposalsAll(offset, rowsCount int,
+	filterByVoteStatus ...int) ([]*pitypes.ProposalInfo, int, error) {
+	// Sanity check
+	if db == nil || db.dbP == nil {
+		return nil, 0, errDef
+	}
+
+	var query storm.Query
+
+	if len(filterByVoteStatus) > 0 {
+		query = db.dbP.Select(q.Eq("VoteStatus",
+			ticketvotev1.VoteStatusT(filterByVoteStatus[0])))
+	} else {
+		query = db.dbP.Select()
+	}
+
+	// Count the proposals based on the query created above.
+	totalCount, err := query.Count(&pitypes.ProposalInfo{})
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// Return the proposals listing starting with the newest.
+	var proposals []*pitypes.ProposalInfo
+	err = query.Skip(offset).Limit(rowsCount).Reverse().OrderBy("Timestamp").
+		Find(&proposals)
+	if err != nil && err != storm.ErrNotFound {
+		log.Errorf("Failed to fetch data from Proposals DB: %v", err)
+	} else {
+		err = nil
+	}
+
+	return proposals, totalCount, nil
+}
+
+// ProposalByToken retrieves the proposal for the given token argument.
+//
+// Satisfies the PoliteiaBackend interface.
+func (db *ProposalsDB) ProposalByToken(token string) (*pitypes.ProposalInfo, error) {
+	if db == nil || db.dbP == nil {
+		return nil, errDef
+	}
+
+	return db.proposal("Token", token)
+}
+
 // fetchVettedTokens fetches all vetted tokens ordered by the timestamp of
 // their last status change.
-func (db *ProposalsTlogDB) fetchVettedTokensInventory() ([]string, error) {
+func (db *ProposalsDB) fetchVettedTokensInventory() ([]string, error) {
 	page := 0
 	vettedTokens := []string{}
 	for {
@@ -223,7 +273,6 @@ func (db *ProposalsTlogDB) fetchVettedTokensInventory() ([]string, error) {
 		}
 		reply, err := db.client.RecordInventoryOrdered(inventoryReq)
 		if err != nil {
-			fmt.Println(err)
 			return nil, err
 		}
 
@@ -237,7 +286,8 @@ func (db *ProposalsTlogDB) fetchVettedTokensInventory() ([]string, error) {
 	return vettedTokens, nil
 }
 
-func (db *ProposalsTlogDB) fetchRecordDetails(tokens []string) (map[string]recordsv1.Record, error) {
+// fetchRecordDetails fetches the record details of the given proposal tokens.
+func (db *ProposalsDB) fetchRecordDetails(tokens []string) (map[string]recordsv1.Record, error) {
 	records := make(map[string]recordsv1.Record, len(tokens))
 	for _, token := range tokens {
 		detailsReq := recordsv1.Details{
@@ -253,16 +303,12 @@ func (db *ProposalsTlogDB) fetchRecordDetails(tokens []string) (map[string]recor
 	return records, nil
 }
 
-// fetchAndParseVettedProposals returns the parsed vetted proposals from
-// politeia API's. .It also cooks up the data needed tos save the proposals in
-// storm db.It first fetches the token inventory for the vetted proposals,
-// then fetches the proposal details, then comments and then vote results.
-// Those data are needed for the information provided in the dcrdata UI.
-// !!! nts: this function will replace the piclient.RetrieveAllProposals and
-// fetchAPIData functionality
-// nts: improve comment
-// nts: proceed to break this func in smaller ones if needed
-func (db *ProposalsTlogDB) fetchProposalsData(tokens []string) ([]*pitypes.ProposalInfo, error) {
+// fetchProposalsData returns the parsed vetted proposals from politeia
+// API's. It also cooks up the data needed to save the proposals in stormdb.
+// It first fetches the token inventory for the vetted proposals, then
+// fetches the proposal details, then comments and then vote results.
+// This data is needed for the information provided in the dcrdata UI.
+func (db *ProposalsDB) fetchProposalsData(tokens []string) ([]*pitypes.ProposalInfo, error) {
 	// Fetch record details for each token from the inventory
 	recordDetails, err := db.fetchRecordDetails(tokens)
 	if err != nil {
@@ -289,8 +335,7 @@ func (db *ProposalsTlogDB) fetchProposalsData(tokens []string) ([]*pitypes.Propo
 
 	var proposals []*pitypes.ProposalInfo
 
-	// Go through every vetted record from the inventory and feed
-	// data used by dcrdata
+	// Iterate through every record and feed data used by dcrdata
 	for _, record := range recordDetails {
 		proposal := pitypes.ProposalInfo{}
 
@@ -298,7 +343,7 @@ func (db *ProposalsTlogDB) fetchProposalsData(tokens []string) ([]*pitypes.Propo
 		proposal.State = record.State
 		proposal.Status = record.Status
 		proposal.Version = record.Version
-		proposal.Timestamp = record.Timestamp
+		proposal.Timestamp = uint64(record.Timestamp)
 		proposal.Username = record.Username
 		proposal.Token = record.CensorshipRecord.Token
 
@@ -347,12 +392,6 @@ func (db *ProposalsTlogDB) fetchProposalsData(tokens []string) ([]*pitypes.Propo
 		proposal.AbandonedAt = ts[2]
 		proposal.StatusChangeMsg = changeMsg
 
-		fmt.Printf("pulbishedat %s censoredat %s abandonedat %s change msg %s\n",
-			proposal.PublishedAt,
-			proposal.CensoredAt,
-			proposal.AbandonedAt,
-			proposal.StatusChangeMsg,
-		)
 		proposals = append(proposals, &proposal)
 	}
 
@@ -360,9 +399,7 @@ func (db *ProposalsTlogDB) fetchProposalsData(tokens []string) ([]*pitypes.Propo
 }
 
 // proposalsSave adds the proposals data to the db.
-//
-// Satisfies the PoliteiaBackend interface.
-func (db *ProposalsTlogDB) proposalsSave(proposals []*pitypes.ProposalInfo) error {
+func (db *ProposalsDB) proposalsSave(proposals []*pitypes.ProposalInfo) error {
 	for _, proposal := range proposals {
 		err := db.dbP.Save(proposal)
 		if err != nil {
@@ -386,8 +423,24 @@ func (db *ProposalsTlogDB) proposalsSave(proposals []*pitypes.ProposalInfo) erro
 	return nil
 }
 
-func (db *ProposalsTlogDB) updateInProgressProposals() (int, error) {
-	// Get proposals by vote status from storm db.
+// proposal is used to retrieve proposals from stormdb given the search
+// arguments passed in.
+func (db *ProposalsDB) proposal(searchBy, searchTerm string) (*pitypes.ProposalInfo, error) {
+	var proposal pitypes.ProposalInfo
+	err := db.dbP.Select(q.Eq(searchBy, searchTerm)).Limit(1).First(&proposal)
+	if err != nil {
+		log.Errorf("Failed to fetch data from Proposals DB: %v", err)
+		return nil, err
+	}
+
+	return &proposal, nil
+}
+
+// proposalsInProgressUpdate fetches proposals with the vote status equal to
+// unauthorized, authorized and started. Afterwords, it proceeds to check if
+// any of them need to be updated on stormdb.
+func (db *ProposalsDB) proposalsInProgressUpdate() (int, error) {
+	// Get proposals by vote status from storm db
 	var inProgress []*pitypes.ProposalInfo
 	err := db.dbP.Select(
 		q.Or(
@@ -397,16 +450,13 @@ func (db *ProposalsTlogDB) updateInProgressProposals() (int, error) {
 		),
 	).Find(&inProgress)
 
-	// Return an error only if the said error is not 'not found' error.
+	// Return an error only if the said error is not 'not found' error
 	if err != nil && err != storm.ErrNotFound {
-		// ntf: check this error
 		return 0, err
 	}
 
-	// countUpdated counts the number of updated records.
-	countUpdated := 0
-
 	// Update in progress proposals with newly fetched data from pi's API.
+	countUpdated := 0
 	for _, prop := range inProgress {
 		proposals, err := db.fetchProposalsData([]string{prop.Token})
 		if err != nil {
@@ -414,7 +464,7 @@ func (db *ProposalsTlogDB) updateInProgressProposals() (int, error) {
 		}
 		proposal := proposals[0]
 
-		// nft: review if data compared on isEqual is enough to determine a
+		// TODO: review if data compared on isEqual is enough to determine a
 		// record update
 		if prop.IsEqual(*proposal) {
 			// No changes made to proposal
@@ -433,165 +483,4 @@ func (db *ProposalsTlogDB) updateInProgressProposals() (int, error) {
 	}
 
 	return countUpdated, nil
-}
-
-func (db *ProposalsTlogDB) ProposalsLastSync() int64 {
-	return atomic.LoadInt64(&db.lastSync)
-}
-
-// TODO: rename to proposalsSync (?)
-// ProposalsCheckUpdates is the function responsible for keeping an up-to-date
-// database synced with politeia's latest updates. It ....
-func (db *ProposalsTlogDB) ProposalsCheckUpdates() error {
-	// Sanity check
-	if db == nil || db.dbP == nil {
-		return errDef
-	}
-
-	// Save the timestamp of the last update check
-	defer atomic.StoreInt64(&db.lastSync, time.Now().UTC().Unix())
-
-	// Update all current proposals whose vote statuses is either
-	// unauthorized, authorized and started, and that has undergone
-	// some data change.
-	updatedCount, err := db.updateInProgressProposals()
-	if err != nil {
-		return err
-	}
-
-	// TODO: order proposals from DB in last status change timestamp, Timestamp field in Record.
-	var proposals []*pitypes.ProposalInfo
-	err = db.dbP.All(&proposals)
-	if err != nil {
-		return err
-	}
-
-	// Is first time fetching proposals?
-	var tokens []string
-	if len(proposals) == 0 {
-		// DB is clean, fetch all proposals
-		vettedTokens, err := db.fetchVettedTokensInventory()
-		if err != nil {
-			return err
-		}
-		tokens = vettedTokens
-	} else {
-		// Fetch first inventory page to search for new proposals
-		inventoryReq := recordsv1.InventoryOrdered{
-			State: recordsv1.RecordStateVetted,
-			Page:  1,
-		}
-		reply, err := db.client.RecordInventoryOrdered(inventoryReq)
-		if err != nil {
-			return err
-		}
-
-		// create proposals map
-		proposalsMap := make(map[string]*pitypes.ProposalInfo, len(proposals))
-		for _, prop := range proposals {
-			proposalsMap[prop.Token] = prop
-		}
-		var tokensProposalsNew []string
-		for _, token := range reply.Tokens {
-			if _, ok := proposalsMap[token]; ok {
-				// All in progress proposals were already updated, continue.
-				continue
-			}
-			// New proposal found
-			tokensProposalsNew = append(tokensProposalsNew, token)
-		}
-		tokens = tokensProposalsNew
-	}
-
-	fmt.Println("checking tokens slice after crazy algo")
-	fmt.Println(tokens)
-
-	// Insert proposals to db, if any
-	var prs []*pitypes.ProposalInfo
-	if len(tokens) > 0 {
-		prs, err = db.fetchProposalsData(tokens)
-		if err != nil {
-			return err
-		}
-	}
-
-	fmt.Println("after fetch any proposal data")
-
-	if len(prs) > 0 {
-		err = db.proposalsSave(prs)
-		if err != nil {
-			return err
-		}
-	}
-
-	fmt.Println("after saveProposal")
-
-	fmt.Println(len(prs) + updatedCount)
-
-	log.Infof("%d politeia proposal DB records were updated",
-		int(len(prs)+updatedCount))
-
-	return nil
-}
-
-func (db *ProposalsTlogDB) ProposalsChartData() (*pitypes.ProposalsChartData, error) {
-	return nil, nil
-}
-
-// ProposalsAll fetches the proposals data from the local db.
-// The argument filterByVoteStatus is optional.
-//
-// Satisfies the PoliteiaBackend interface.
-func (db *ProposalsTlogDB) ProposalsAll(offset, rowsCount int,
-	filterByVoteStatus ...int) ([]*pitypes.ProposalInfo, int, error) {
-	// Sanity check
-	if db == nil || db.dbP == nil {
-		return nil, 0, errDef
-	}
-
-	var query storm.Query
-
-	if len(filterByVoteStatus) > 0 {
-		query = db.dbP.Select(q.Eq("VoteStatus",
-			ticketvotev1.VoteStatusT(filterByVoteStatus[0])))
-	} else {
-		query = db.dbP.Select()
-	}
-
-	// Count the proposals based on the query created above.
-	totalCount, err := query.Count(&pitypes.ProposalInfo{})
-	if err != nil {
-		return nil, 0, err
-	}
-
-	// Return the proposals listing starting with the newest.
-	var proposals []*pitypes.ProposalInfo
-	err = query.Skip(offset).Limit(rowsCount).Reverse().OrderBy("Timestamp").
-		Find(&proposals)
-	if err != nil && err != storm.ErrNotFound {
-		log.Errorf("Failed to fetch data from Proposals DB: %v", err)
-	} else {
-		err = nil
-	}
-
-	return proposals, totalCount, nil
-}
-
-func (db *ProposalsTlogDB) ProposalByToken(token string) (*pitypes.ProposalInfo, error) {
-	if db == nil || db.dbP == nil {
-		return nil, errDef
-	}
-
-	return db.proposal("Token", token)
-}
-
-func (db *ProposalsTlogDB) proposal(searchBy, searchTerm string) (*pitypes.ProposalInfo, error) {
-	var proposal pitypes.ProposalInfo
-	err := db.dbP.Select(q.Eq(searchBy, searchTerm)).Limit(1).First(&proposal)
-	if err != nil {
-		log.Errorf("Failed to fetch data from Proposals DB: %v", err)
-		return nil, err
-	}
-
-	return &proposal, nil
 }

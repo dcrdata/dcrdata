@@ -28,7 +28,7 @@
                                 data-target="pagenavigation.votestatus"
                                 data-action="change->pagenavigation#setFilterbyVoteStatus"
                             >
-                                <option value="all">All</option>
+                                <option value="0">All</option>
                                 {{range $k, $v := .VotesStatus}}
                                     <option {{if eq $k $.VStatusFilter}}selected{{end}} value="{{$k}}">{{$v}}</option>
                                 {{end}}
@@ -141,7 +141,7 @@
                         </td>
                         <td class="text-left">
                             {{if .VoteStatus}}
-                                {{if eq $v.VoteStatusDesc "unauthorized"}}
+                                {{if eq (index $.VotesStatus .VoteStatus) "Unauthorized"}}
                                     {{if .AbandonedAt}}
                                         <span class="text-abandoned position-relative" data-tooltip="Proposal abandoned">
                                             Abandoned
@@ -204,10 +204,10 @@
                             {{end}}
                         </td>
                         <td class="text-right">
-                            {{if and .VoteStatus (ne $v.VoteStatusDesc "unauthorized")}}
+                            {{if and .VoteStatus (ne (index $.VotesStatus .VoteStatus) "Unauthorized")}}
                                 {{.TotalVotes}}
                                 <span class="fs12 text-black-50">
-                                    (q
+                                    (
                                     {{- if eq $v.EligibleTickets 0 -}}
                                         0%
                                     {{else -}}
@@ -219,7 +219,7 @@
                                &mdash;
                             {{end}}
                         </td>
-                        <td class="text-right" data-target="time.age" data-age="{{.Timestamp}}"></td>
+                        <td class="text-right" data-target="time.age" data-age="{{(int64 .Timestamp)}}"></td>
                     </tr>
                 {{end}}
                 {{end}}

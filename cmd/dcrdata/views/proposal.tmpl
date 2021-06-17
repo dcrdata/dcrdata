@@ -45,7 +45,7 @@
                 </div>
 
               {{- /* LIVE OR FINISHED */ -}}
-              {{else if or (eq $status "started") (eq $status "finished")}}
+              {{else if or (eq $status "started") (eq $status "finished") (eq $status "approved") (eq $status "rejected")}}
                 <div class="fs22">{{.Name}}</div>
                 {{if eq $status "started"}}
                   <div>
@@ -80,7 +80,7 @@
                   <div class="col-auto d-flex flex-column justify-content-between pl-3">
                     <span class="fs17 lh1em">
                       <span class="fs22 medium-sans">{{printf "%.1f" (f32x100 $metadata.Approval)}}%</span>
-                      approval of {{intComma $metadata.VoteCount}} votes ({{printf "%.0f" (percentage $metadata.VoteCount .NumOfEligibleVotes)}}% turnout)
+                      approval of {{intComma $metadata.VoteCount}} votes ({{printf "%.0f" (percentage $metadata.VoteCount (int64 .EligibleTickets))}}% turnout)
                     </span>
                     {{if $metadata.QuorumAchieved}}
                       <div class="d-flex align-items-center"><span class="fs20 dcricon-affirm mr-2"></span>
@@ -136,22 +136,22 @@
                     </tr>
                     <tr>
                       <td class="text-right medium-sans text-nowrap pr-2 py-2" >Eligible:</td>
-                      <td class="text-left py-1 text-secondary">{{.NumOfEligibleVotes}} tickets</td>
+                      <td class="text-left py-1 text-secondary">{{.EligibleTickets}} tickets</td>
                       <td class="text-right medium-sans text-nowrap pr-2 py-2">Voting Period:</td>
                       <td class="text-left py-1 text-secondary"
-                        ><a href="/block/{{$metadata.StartHeight}}">{{$metadata.StartHeight}}</a>
+                        ><a href="/block/{{.StartBlockHeight}}">{{.StartBlockHeight}}</a>
                         &ndash;
                         {{if eq $status "finished"}}
-                          <a href="/block/{{.Endheight}}">{{.Endheight}}</a>
+                          <a href="/block/{{.EndBlockHeight}}">{{.EndBlockHeight}}</a>
                         {{else}}
-                          {{.Endheight}}
+                          {{.EndBlockHeight}}
                         {{end}}
                       </td>
                     </tr>
                   {{end}}
                   <tr>
                     <td class="text-right medium-sans text-nowrap pr-2 py-2">Discussion:</td>
-                    <td class="text-left py-1 text-secondary">{{.NumComments}} comments</td>
+                    <td class="text-left py-1 text-secondary">{{.CommentsCount}} comments</td>
                     <td class="text-right medium-sans text-nowrap pr-2 py-2" >Updated:</td>
                     <td class="text-left py-1 text-secondary">{{TimeConversion .Timestamp}}</td>
                   </tr>

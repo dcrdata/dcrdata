@@ -14,6 +14,8 @@ import (
 	recordsv1 "github.com/decred/politeia/politeiawww/api/records/v1"
 )
 
+// userMetadataDecode returns the parsed data for the usermd plugin metadata
+// stream.
 func userMetadataDecode(ms []recordsv1.MetadataStream) (*usermd.UserMetadata, error) {
 	var userMD *usermd.UserMetadata
 	for _, m := range ms {
@@ -33,6 +35,8 @@ func userMetadataDecode(ms []recordsv1.MetadataStream) (*usermd.UserMetadata, er
 	return userMD, nil
 }
 
+// proposalMetadataDecode returns the parsed data for the pi plugin proposal
+// metadata stream.
 func proposalMetadataDecode(fs []recordsv1.File) (*piv1.ProposalMetadata, error) {
 	var pmp *piv1.ProposalMetadata
 	for _, f := range fs {

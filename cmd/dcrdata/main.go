@@ -26,7 +26,7 @@ import (
 	"github.com/decred/dcrdata/db/dcrpg/v6"
 	"github.com/decred/dcrdata/exchanges/v3"
 	"github.com/decred/dcrdata/gov/v4/agendas"
-	politeia "github.com/decred/dcrdata/gov/v4/politeia/tlog"
+	politeia "github.com/decred/dcrdata/gov/v4/politeia"
 
 	"github.com/decred/dcrdata/v6/blockdata"
 	"github.com/decred/dcrdata/v6/db/cache"
@@ -445,23 +445,12 @@ func _main(ctx context.Context) error {
 		return fmt.Errorf("failed to create new agendas db instance: %v", err)
 	}
 
-	// Creates a new or loads an existing proposals db instance that helps to
-	// store and retrieve proposals data. Proposals votes is Off-Chain
-	// data stored in github repositories away from the decred blockchain. It also
-	// creates a new http client needed to query Politeia API endpoints.
-	// When piparser is disabled, disable the API calls too.
-
-	// TODO: Check new execution conditions. makes sense to always run a check updates
-	// at startup
-	proposalsInstance, err := politeia.NewProposalsTlogDB(cfg.PoliteiaAPIURL,
+	// Creates a new or loads an existing proposals db instance that stores
+	// data used by dcrdata from politeia.
+	proposalsDB, err := politeia.NewProposalsDB(cfg.PoliteiaAPIURL,
 		filepath.Join(cfg.DataDir, cfg.ProposalsFileName))
 	if err != nil {
 		return fmt.Errorf("failed to create new proposals db instance: %v", err)
-	}
-
-	err = proposalsInstance.ProposalsCheckUpdates()
-	if err != nil {
-		return fmt.Errorf("failed to check for proposals updates: %v", err)
 	}
 
 	// A vote tracker tracks current block and stake versions and votes. Only
@@ -477,7 +466,6 @@ func _main(ctx context.Context) error {
 	}
 
 	// Create the explorer system.
-
 	explore := explorer.New(&explorer.ExplorerConfig{
 		DataSource:    chainDB,
 		ChartSource:   charts,
@@ -488,7 +476,7 @@ func _main(ctx context.Context) error {
 		XcBot:         xcBot,
 		AgendasSource: agendaDB,
 		Tracker:       tracker,
-		Proposals:     proposalsInstance,
+		Proposals:     proposalsDB,
 		PoliteiaURL:   cfg.PoliteiaAPIURL,
 		MainnetLink:   cfg.MainnetLink,
 		TestnetLink:   cfg.TestnetLink,
@@ -642,6 +630,7 @@ func _main(ctx context.Context) error {
 		DataSource:        chainDB,
 		XcBot:             xcBot,
 		AgendasDBInstance: agendaDB,
+		ProposalsDB:       proposalsDB,
 		MaxAddrs:          cfg.MaxCSVAddrs,
 		Charts:            charts,
 	})
@@ -752,7 +741,7 @@ func _main(ctx context.Context) error {
 		r.Get("/agendas", explore.AgendasPage)
 		r.With(explorer.AgendaPathCtx).Get("/agenda/{agendaid}", explore.AgendaPage)
 		r.Get("/proposals", explore.ProposalsPage)
-		r.With(explorer.ProposalPathCtx).Get("/proposal/{proposalrefid}", explore.ProposalPage)
+		r.With(explorer.ProposalPathCtx).Get("/proposal/{proposaltoken}", explore.ProposalPage)
 		r.Get("/decodetx", explore.DecodeTxPage)
 		r.Get("/search", explore.Search)
 		r.Get("/charts", explore.Charts)
@@ -1020,18 +1009,13 @@ func _main(ctx context.Context) error {
 	// Retrieve newly added proposals and add them to the proposals db(storm).
 	// Proposal db update is made asynchronously to ensure that the system works
 	// even when the Politeia API endpoint set is down.
-	// TODO: Run this conditionally?
+	log.Info("Syncing proposals data with Politeia API's.")
 	go func() {
-		if err := proposalsInstance.ProposalsCheckUpdates(); err != nil {
+		if err := proposalsDB.ProposalsSync(); err != nil {
 			log.Errorf("updating proposals db failed: %v", err)
 		}
+		log.Info("Politeia proposals sync complete.")
 	}()
-
-	// It initiates the updates fetch process for the proposal votes data after
-	// sync for the other tables is complete. It is only run if the system is on
-	// full mode. An error in fetching the updates should not stop the system
-	// functionality since it could be attributed to the external systems used.
-	log.Info("Running updates retrieval for Politeia's Proposals. Please wait...")
 
 	// Monitors for new blocks, transactions, and reorgs should not run before
 	// blockchain syncing and DB indexing completes. If started before then, the

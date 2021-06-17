@@ -127,7 +127,7 @@ type config struct {
 	// Consensus agendas and politeia proposals
 	AgendasDBFileName string `long:"agendadbfile" description:"Agendas DB file name (default is agendas.db)." env:"DCRDATA_AGENDAS_DB_FILE_NAME"`
 	ProposalsFileName string `long:"proposalsdbfile" description:"Proposals DB file name (default is proposals.db)." env:"DCRDATA_PROPOSALS_DB_FILE_NAME"`
-	PoliteiaAPIURL    string `long:"politeiaurl" description:"Defines the root API politeia URL (defaults to https://proposals.decred.org)." env:"DCRDATA_POLITEIA_URL"`
+	PoliteiaAPIURL    string `long:"politeiaurl" description:"Defines the root API politeia URL (defaults to https://proposals.decred.org/api/)." env:"DCRDATA_POLITEIA_URL"`
 
 	// Caching and optimization.
 	AddrCacheCap     int    `long:"addr-cache-cap" description:"Address cache capacity in bytes." env:"DCRDATA_ADDR_CACHE_CAP"`
@@ -630,17 +630,6 @@ func loadConfig() (*config, error) {
 		parser.WriteHelp(os.Stderr)
 		return loadConfigError(err)
 	}
-
-	// Checks if the expected format of the API URL was set. It also drops any
-	// unnecessary parts of the URL.
-	urlPath, err := retrieveRootPath(cfg.PoliteiaAPIURL)
-	if err != nil {
-		return loadConfigError(err)
-	}
-	cfg.PoliteiaAPIURL = urlPath
-
-	fmt.Println("PoliteiaAPIURL")
-	fmt.Println(urlPath)
 
 	// Check the supplied APIListen address
 	if cfg.APIListen == "" {
