@@ -1009,7 +1009,7 @@ func _main(ctx context.Context) error {
 	// Retrieve newly added proposals and add them to the proposals db(storm).
 	// Proposal db update is made asynchronously to ensure that the system works
 	// even when the Politeia API endpoint set is down.
-	log.Info("Syncing proposals data with Politeia API's.")
+	log.Info("Syncing proposals data with Politeia.")
 	go func() {
 		if err := proposalsDB.ProposalsSync(); err != nil {
 			log.Errorf("updating proposals db failed: %v", err)

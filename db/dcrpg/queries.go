@@ -3856,36 +3856,6 @@ func retrieveTicketByOutputCount(ctx context.Context, db *sql.DB, interval int64
 	return heightArr, soloArr, pooledArr, err
 }
 
-// retrieveProposalVotesData returns the vote data associated with the provided
-// proposal token.
-// TODO: rewirte in appContext for charts data
-// func retrieveProposalVotesData(ctx context.Context, db *sql.DB,
-// 	proposalToken string) (*dbtypes.ProposalChartsData, error) {
-// 	rows, err := db.QueryContext(ctx, internal.SelectProposalVotesChartData, proposalToken)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-
-// 	defer closeRows(rows)
-
-// 	data := new(dbtypes.ProposalChartsData)
-// 	for rows.Next() {
-// 		var yes, no uint64
-// 		var timestamp time.Time
-
-// 		if err = rows.Scan(&timestamp, &no, &yes); err != nil {
-// 			return nil, err
-// 		}
-
-// 		data.No = append(data.No, no)
-// 		data.Yes = append(data.Yes, yes)
-// 		data.Time = append(data.Time, dbtypes.NewTimeDef(timestamp))
-// 	}
-// 	err = rows.Err()
-
-// 	return data, err
-// }
-
 // --- blocks and block_chain tables ---
 
 // InsertBlock inserts the specified dbtypes.Block as with the given

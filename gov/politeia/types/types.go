@@ -4,7 +4,6 @@
 package types
 
 import (
-	"github.com/decred/dcrdata/v6/db/dbtypes"
 	recordsv1 "github.com/decred/politeia/politeiawww/api/records/v1"
 	ticketvotev1 "github.com/decred/politeia/politeiawww/api/ticketvote/v1"
 )
@@ -20,7 +19,7 @@ type ProposalRecord struct {
 	Status    recordsv1.RecordStatusT `json:"status"`
 	Token     string                  `json:"token"`
 	Version   uint32                  `json:"version"`
-	Timestamp uint64                  `json:"timestamp"`
+	Timestamp uint64                  `json:"timestamp" storm:"index"`
 	Username  string                  `json:"username"`
 
 	// Pi metadata
@@ -41,8 +40,13 @@ type ProposalRecord struct {
 	EndBlockHeight   uint32                    `json:"endblockheight"`
 	QuorumPercentage uint32                    `json:"quorumpercentage"`
 	PassPercentage   uint32                    `json:"passpercentage"`
+	TotalVotes       uint64                    `json:"totalvotes"`
+	ChartData        *ProposalChartData        `json:"chartdata"`
 
-	TotalVotes uint64 `json:"totalvotes"`
+	// Synced is used to indicate that this proposal is already fully
+	// synced with politeia server, and does not need to make any more
+	// requests for this proposal
+	Synced bool `json:"synced"`
 
 	// Timestamps
 	PublishedAt uint64 `json:"publishedat" storm:"index"`
@@ -52,13 +56,12 @@ type ProposalRecord struct {
 
 // ProposalChartData defines the data used to plot proposal votes charts.
 type ProposalChartData struct {
-	Yes  uint64            `json:"yes,omitempty"`
-	No   uint64            `json:"no,omitempty"`
-	Time []dbtypes.TimeDef `json:"time,omitempty"`
+	Yes  []uint64 `json:"yes"`
+	No   []uint64 `json:"no"`
+	Time []int64  `json:"time"`
 }
 
 // IsEqual compares data between the two ProposalsInfo structs passed.
-
 func (pi *ProposalRecord) IsEqual(b ProposalRecord) bool {
 	if pi.Token != b.Token || pi.Name != b.Name || pi.State != b.State ||
 		pi.CommentsCount != b.CommentsCount ||

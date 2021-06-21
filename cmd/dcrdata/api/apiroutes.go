@@ -33,7 +33,6 @@ import (
 	m "github.com/decred/dcrdata/cmd/dcrdata/middleware"
 	"github.com/decred/dcrdata/exchanges/v3"
 	"github.com/decred/dcrdata/gov/v4/agendas"
-	pitypes "github.com/decred/dcrdata/gov/v4/politeia/types"
 	apitypes "github.com/decred/dcrdata/v6/api/types"
 	"github.com/decred/dcrdata/v6/db/cache"
 	"github.com/decred/dcrdata/v6/db/dbtypes"
@@ -120,7 +119,7 @@ type appContext struct {
 	Status       *apitypes.Status
 	xcBot        *exchanges.ExchangeBot
 	AgendaDB     *agendas.AgendaDB
-	ProposalsDB  *explorer.PoliteiaBackend
+	ProposalsDB  explorer.PoliteiaBackend
 	maxCSVAddrs  int
 	charts       *cache.ChartData
 	isPiDisabled bool // is piparser disabled
@@ -134,7 +133,7 @@ type AppContextConfig struct {
 	DataSource         DataSource
 	XcBot              *exchanges.ExchangeBot
 	AgendasDBInstance  *agendas.AgendaDB
-	ProposalsDB        *explorer.PoliteiaBackend
+	ProposalsDB        explorer.PoliteiaBackend
 	MaxAddrs           int
 	Charts             *cache.ChartData
 	IsPiparserDisabled bool
@@ -1194,13 +1193,16 @@ func (c *appContext) getTicketPoolByDate(w http.ResponseWriter, r *http.Request)
 	writeJSON(w, tpResponse, m.GetIndentCtx(r))
 }
 
-func (c *appContext) getProposalChartData(w http.ResponseWriter, r *http.Request) {
-	// TODO: so rewrite this function. ditch proposalVotes from datasource, put in a instance of
-	// tlog db on appContext.
+type TestType struct {
+	Yes  []uint64          `json:"yes"`
+	No   []uint64          `json:"no"`
+	Time []dbtypes.TimeDef `json:"time"`
+}
 
+func (c *appContext) getProposalChartData(w http.ResponseWriter, r *http.Request) {
 	token := m.GetProposalTokenCtx(r)
 
-	votesData, err := c.ProposalsDB.ProposalChartData(token)
+	proposal, err := c.ProposalsDB.ProposalByToken(token)
 	if dbtypes.IsTimeoutErr(err) {
 		apiLog.Errorf("ProposalVotes: %v", err)
 		http.Error(w, "Database timeout.", http.StatusServiceUnavailable)
@@ -1213,7 +1215,20 @@ func (c *appContext) getProposalChartData(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	writeJSON(w, pitypes.ProposalsChartData{}, m.GetIndentCtx(r))
+	fmt.Println("before formatting timestamps")
+	timeDefs := make([]dbtypes.TimeDef, len(proposal.ChartData.Time))
+	for i, time := range proposal.ChartData.Time {
+		timeDefs[i] = dbtypes.NewTimeDefFromUNIX(time)
+	}
+	resp := TestType{
+		Yes:  proposal.ChartData.Yes,
+		No:   proposal.ChartData.No,
+		Time: timeDefs,
+	}
+
+	fmt.Println("after format")
+	fmt.Println(resp.Time)
+	writeJSON(w, resp, m.GetIndentCtx(r))
 }
 
 func (c *appContext) getBlockSize(w http.ResponseWriter, r *http.Request) {

@@ -1,4 +1,4 @@
-package tlog
+package politeia
 
 import (
 	"encoding/base64"

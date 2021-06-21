@@ -2265,7 +2265,7 @@ func (exp *explorerUI) ProposalPage(w http.ResponseWriter, r *http.Request) {
 		CommonPageData: commonData,
 		Data:           prop,
 		PoliteiaURL:    exp.politeiaAPIURL,
-		ShortToken:     prop.Token,
+		ShortToken:     prop.Token, // TODO: fix link for Pi discussion
 		Metadata:       prop.Metadata(int64(commonData.Tip.Height), int64(exp.ChainParams.TargetTimePerBlock/time.Second)),
 	})
 
