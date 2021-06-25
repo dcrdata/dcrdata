@@ -153,7 +153,7 @@ export default class extends Controller {
     let yes = 0
     let hourlyYes = 0
     let hourlyNo = 0
-    let currentDate = new Date(chartData.time[0])
+    let currentDate = new Date(chartData?.time[0] * 1000)
     let currentHour = currentDate.getHours()
 
     percentData = []
@@ -161,7 +161,7 @@ export default class extends Controller {
     hourlyVotesData = []
 
     chartData.time.map((n, i) => {
-      const formatedDate = new Date(n)
+      const formatedDate = new Date(n * 1000)
       yes += chartData.yes[i]
       total += (chartData.no[i] + chartData.yes[i])
 
@@ -174,6 +174,7 @@ export default class extends Controller {
       hourlyYes += chartData.yes[i]
       hourlyNo += chartData.no[i]
       if (formatedDate.getHours() !== currentHour) {
+        currentDate.setMinutes(0)
         hourlyVotesData.push([currentDate, hourlyYes, hourlyNo * -1])
         currentDate = formatedDate
         currentHour = formatedDate.getHours()
@@ -184,9 +185,9 @@ export default class extends Controller {
 
     // add empty data at the beginning and end of hourlyVotesData
     // to pad the bar chart data on both ends
-    const firstDate = new Date(chartData.time[0])
+    const firstDate = new Date(chartData.time[0] * 1000)
     firstDate.setHours(firstDate.getHours() - 1)
-    const lastDate = new Date(chartData.time[chartData.time.length - 1])
+    const lastDate = new Date(chartData.time[chartData.time.length - 1] * 1000)
     lastDate.setHours(lastDate.getHours() + 1)
     hourlyVotesData.unshift([firstDate, 0, 0])
     hourlyVotesData.push([lastDate, 0, 0])

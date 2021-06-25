@@ -445,9 +445,9 @@ func _main(ctx context.Context) error {
 		return fmt.Errorf("failed to create new agendas db instance: %v", err)
 	}
 
-	// Creates a new or loads an existing proposals db instance that stores
-	// data used by dcrdata from politeia.
-	proposalsDB, err := politeia.NewProposalsDB(cfg.PoliteiaAPIURL,
+	// Creates a new or loads an existing proposals db instance that stores and
+	// retrieves data from politeia and is used by dcrdata.
+	proposalsDB, err := politeia.NewProposalsDB(cfg.PoliteiaURL,
 		filepath.Join(cfg.DataDir, cfg.ProposalsFileName))
 	if err != nil {
 		return fmt.Errorf("failed to create new proposals db instance: %v", err)
@@ -477,7 +477,7 @@ func _main(ctx context.Context) error {
 		AgendasSource: agendaDB,
 		Tracker:       tracker,
 		Proposals:     proposalsDB,
-		PoliteiaURL:   cfg.PoliteiaAPIURL,
+		PoliteiaURL:   cfg.PoliteiaURL,
 		MainnetLink:   cfg.MainnetLink,
 		TestnetLink:   cfg.TestnetLink,
 		ReloadHTML:    cfg.ReloadHTML,

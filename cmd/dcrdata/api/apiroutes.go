@@ -70,9 +70,6 @@ type DataSource interface {
 	Height() int64
 	AllAgendas() (map[string]dbtypes.MileStone, error)
 	GetTicketInfo(txid string) (*apitypes.TicketInfo, error)
-	// TODO: check if needed. porposalsTlog instance is going to appContext for retrieving
-	// charts data
-	// ProposalVotes(proposalToken string) (*dbtypes.ProposalChartsData, error)
 	PowerlessTickets() (*apitypes.PowerlessTickets, error)
 	GetStakeInfoExtendedByHash(hash string) *apitypes.StakeInfoExtended
 	GetStakeInfoExtendedByHeight(idx int) *apitypes.StakeInfoExtended
@@ -1193,42 +1190,23 @@ func (c *appContext) getTicketPoolByDate(w http.ResponseWriter, r *http.Request)
 	writeJSON(w, tpResponse, m.GetIndentCtx(r))
 }
 
-type TestType struct {
-	Yes  []uint64          `json:"yes"`
-	No   []uint64          `json:"no"`
-	Time []dbtypes.TimeDef `json:"time"`
-}
-
 func (c *appContext) getProposalChartData(w http.ResponseWriter, r *http.Request) {
 	token := m.GetProposalTokenCtx(r)
 
 	proposal, err := c.ProposalsDB.ProposalByToken(token)
 	if dbtypes.IsTimeoutErr(err) {
-		apiLog.Errorf("ProposalVotes: %v", err)
+		apiLog.Errorf("ProposalByToken: %v", err)
 		http.Error(w, "Database timeout.", http.StatusServiceUnavailable)
 		return
 	}
 	if err != nil {
-		apiLog.Errorf("Unable to get proposals votes for token %s : %v", token, err)
+		apiLog.Errorf("Unable to get proposal chart data for token %s : %v", token, err)
 		http.Error(w, http.StatusText(http.StatusUnprocessableEntity),
 			http.StatusUnprocessableEntity)
 		return
 	}
 
-	fmt.Println("before formatting timestamps")
-	timeDefs := make([]dbtypes.TimeDef, len(proposal.ChartData.Time))
-	for i, time := range proposal.ChartData.Time {
-		timeDefs[i] = dbtypes.NewTimeDefFromUNIX(time)
-	}
-	resp := TestType{
-		Yes:  proposal.ChartData.Yes,
-		No:   proposal.ChartData.No,
-		Time: timeDefs,
-	}
-
-	fmt.Println("after format")
-	fmt.Println(resp.Time)
-	writeJSON(w, resp, m.GetIndentCtx(r))
+	writeJSON(w, proposal.ChartData, m.GetIndentCtx(r))
 }
 
 func (c *appContext) getBlockSize(w http.ResponseWriter, r *http.Request) {

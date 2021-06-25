@@ -66,7 +66,7 @@ var (
 
 	defaultAgendasDBFileName = "agendas.db"
 	defaultProposalsFileName = "proposals.db"
-	defaultPoliteiaAPIURl    = "https://proposals.decred.org/api/"
+	defaultPoliteiaURL       = "https://proposals.decred.org/"
 	defaultChartsCacheDump   = "chartscache.gob"
 
 	defaultPGHost           = "127.0.0.1:5432"
@@ -127,7 +127,7 @@ type config struct {
 	// Consensus agendas and politeia proposals
 	AgendasDBFileName string `long:"agendadbfile" description:"Agendas DB file name (default is agendas.db)." env:"DCRDATA_AGENDAS_DB_FILE_NAME"`
 	ProposalsFileName string `long:"proposalsdbfile" description:"Proposals DB file name (default is proposals.db)." env:"DCRDATA_PROPOSALS_DB_FILE_NAME"`
-	PoliteiaAPIURL    string `long:"politeiaurl" description:"Defines the root API politeia URL (defaults to https://proposals.decred.org/api/)." env:"DCRDATA_POLITEIA_URL"`
+	PoliteiaURL       string `long:"politeiaurl" description:"Defines the root API politeia URL (defaults to https://proposals.decred.org/)." env:"DCRDATA_POLITEIA_URL"`
 
 	// Caching and optimization.
 	AddrCacheCap     int    `long:"addr-cache-cap" description:"Address cache capacity in bytes." env:"DCRDATA_ADDR_CACHE_CAP"`
@@ -179,7 +179,7 @@ var (
 		ConfigFile:          defaultConfigFile,
 		AgendasDBFileName:   defaultAgendasDBFileName,
 		ProposalsFileName:   defaultProposalsFileName,
-		PoliteiaAPIURL:      defaultPoliteiaAPIURl,
+		PoliteiaURL:         defaultPoliteiaURL,
 		ChartsCacheDump:     defaultChartsCacheDump,
 		DebugLevel:          defaultLogLevel,
 		HTTPProfPath:        defaultHTTPProfPath,

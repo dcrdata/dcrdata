@@ -89,6 +89,7 @@ func statusChangeMetadataDecode(md []recordsv1.MetadataStream) ([]uint64, string
 		}
 	}
 
+	// Parse timestamps according to status
 	var (
 		publishedAt, censoredAt, abandonedAt int64
 		changeMsg                            string

@@ -221,7 +221,7 @@ type explorerUI struct {
 	// displaySyncStatusPage indicates if the sync status page is the only web
 	// page that should be accessible during DB synchronization.
 	displaySyncStatusPage atomic.Value
-	politeiaAPIURL        string
+	politeiaURL           string
 
 	invsMtx sync.RWMutex
 	invs    *types.MempoolInfo
@@ -308,7 +308,7 @@ func New(cfg *ExplorerConfig) *explorerUI {
 	exp.agendasSource = cfg.AgendasSource
 	exp.voteTracker = cfg.Tracker
 	exp.proposals = cfg.Proposals
-	exp.politeiaAPIURL = cfg.PoliteiaURL
+	exp.politeiaURL = cfg.PoliteiaURL
 	explorerLinks.Mainnet = cfg.MainnetLink
 	explorerLinks.Testnet = cfg.TestnetLink
 	explorerLinks.MainnetSearch = cfg.MainnetLink + "search?search="

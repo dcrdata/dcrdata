@@ -2237,13 +2237,12 @@ func (exp *explorerUI) AgendasPage(w http.ResponseWriter, r *http.Request) {
 // ProposalPage is the page handler for the "/proposal" path.
 func (exp *explorerUI) ProposalPage(w http.ResponseWriter, r *http.Request) {
 	if exp.proposals == nil {
-		log.Errorf("proposalsDB is disabled")
-		exp.StatusPage(w, defaultErrorCode, "the proposalsDB was not instantiated correctly",
+		log.Errorf("Proposal DB instance is not available")
+		exp.StatusPage(w, defaultErrorCode, "the proposals DB was not instantiated correctly",
 			"", ExpStatusNotFound)
 		return
 	}
 
-	// Attempts to retrieve a proposal token from the URL path.
 	token := getProposalTokenCtx(r)
 
 	prop, err := exp.proposals.ProposalByToken(token)
@@ -2264,8 +2263,8 @@ func (exp *explorerUI) ProposalPage(w http.ResponseWriter, r *http.Request) {
 	}{
 		CommonPageData: commonData,
 		Data:           prop,
-		PoliteiaURL:    exp.politeiaAPIURL,
-		ShortToken:     prop.Token, // TODO: fix link for Pi discussion
+		PoliteiaURL:    exp.politeiaURL,
+		ShortToken:     prop.Token[1:7],
 		Metadata:       prop.Metadata(int64(commonData.Tip.Height), int64(exp.ChainParams.TargetTimePerBlock/time.Second)),
 	})
 
@@ -2283,8 +2282,8 @@ func (exp *explorerUI) ProposalPage(w http.ResponseWriter, r *http.Request) {
 // ProposalsPage is the page handler for the "/proposals" path.
 func (exp *explorerUI) ProposalsPage(w http.ResponseWriter, r *http.Request) {
 	if exp.proposals == nil {
-		errMsg := "Remove the disable-piparser flag to activate it."
-		log.Errorf("proposals page is disabled. %s", errMsg)
+		errMsg := "Proposal DB instance is not available"
+		log.Errorf("proposals page error: %s", errMsg)
 		exp.StatusPage(w, errMsg, fmt.Sprintf(pageDisabledCode, "/proposals"), "", ExpStatusPageDisabled)
 		return
 	}
@@ -2369,7 +2368,7 @@ func (exp *explorerUI) ProposalsPage(w http.ResponseWriter, r *http.Request) {
 		Limit:          int64(rowsCount),
 		VStatusFilter:  int(filterBy),
 		TotalCount:     int64(count),
-		PoliteiaURL:    exp.politeiaAPIURL,
+		PoliteiaURL:    exp.politeiaURL,
 		LastPropSync:   exp.proposals.ProposalsLastSync(),
 		TimePerBlock:   int64(exp.ChainParams.TargetTimePerBlock.Seconds()),
 	})
