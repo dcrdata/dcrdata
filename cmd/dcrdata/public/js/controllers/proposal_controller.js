@@ -167,14 +167,14 @@ export default class extends Controller {
 
       const percent = ((yes * 100) / total).toFixed(2)
 
-      percentData.push([formatedDate, parseFloat(percent)])
-      cumulativeData.push([formatedDate, total])
-
-      // accumulate hourly vote data
+      // accumulate hourly vote data. currentDate keeps track
+      // of the hour of such date we are parsing data for
       hourlyYes += chartData.yes[i]
       hourlyNo += chartData.no[i]
       if (formatedDate.getHours() !== currentHour) {
         currentDate.setMinutes(0)
+        percentData.push([currentDate, parseFloat(percent)])
+        cumulativeData.push([currentDate, total])
         hourlyVotesData.push([currentDate, hourlyYes, hourlyNo * -1])
         currentDate = formatedDate
         currentHour = formatedDate.getHours()
