@@ -29,7 +29,7 @@ type ProposalRecord struct {
 	UserID string `json:"userid"`
 
 	// Comments API data
-	CommentsCount int32 `json:"commentscount`
+	CommentsCount int32 `json:"commentscount"`
 
 	// Ticketvote API data
 	VoteStatus       ticketvotev1.VoteStatusT  `json:"votestatus"`
