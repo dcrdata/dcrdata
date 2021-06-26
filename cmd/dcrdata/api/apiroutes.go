@@ -110,31 +110,29 @@ type DataSource interface {
 
 // dcrdata application context used by all route handlers
 type appContext struct {
-	nodeClient   *rpcclient.Client
-	Params       *chaincfg.Params
-	DataSource   DataSource
-	Status       *apitypes.Status
-	xcBot        *exchanges.ExchangeBot
-	AgendaDB     *agendas.AgendaDB
-	ProposalsDB  explorer.PoliteiaBackend
-	maxCSVAddrs  int
-	charts       *cache.ChartData
-	isPiDisabled bool // is piparser disabled
+	nodeClient  *rpcclient.Client
+	Params      *chaincfg.Params
+	DataSource  DataSource
+	Status      *apitypes.Status
+	xcBot       *exchanges.ExchangeBot
+	AgendaDB    *agendas.AgendaDB
+	ProposalsDB explorer.PoliteiaBackend
+	maxCSVAddrs int
+	charts      *cache.ChartData
 }
 
 // AppContextConfig is the configuration for the appContext and the only
 // argument to its constructor.
 type AppContextConfig struct {
-	Client             *rpcclient.Client
-	Params             *chaincfg.Params
-	DataSource         DataSource
-	XcBot              *exchanges.ExchangeBot
-	AgendasDBInstance  *agendas.AgendaDB
-	ProposalsDB        explorer.PoliteiaBackend
-	MaxAddrs           int
-	Charts             *cache.ChartData
-	IsPiparserDisabled bool
-	AppVer             string
+	Client            *rpcclient.Client
+	Params            *chaincfg.Params
+	DataSource        DataSource
+	XcBot             *exchanges.ExchangeBot
+	AgendasDBInstance *agendas.AgendaDB
+	ProposalsDB       explorer.PoliteiaBackend
+	MaxAddrs          int
+	Charts            *cache.ChartData
+	AppVer            string
 }
 
 // NewContext constructs a new appContext from the RPC client and database, and
@@ -150,16 +148,15 @@ func NewContext(cfg *AppContextConfig) *appContext {
 	}
 
 	return &appContext{
-		nodeClient:   cfg.Client,
-		Params:       cfg.Params,
-		DataSource:   cfg.DataSource,
-		xcBot:        cfg.XcBot,
-		AgendaDB:     cfg.AgendasDBInstance,
-		ProposalsDB:  cfg.ProposalsDB,
-		Status:       apitypes.NewStatus(uint32(nodeHeight), conns, APIVersion, cfg.AppVer, cfg.Params.Name),
-		maxCSVAddrs:  cfg.MaxAddrs,
-		charts:       cfg.Charts,
-		isPiDisabled: cfg.IsPiparserDisabled,
+		nodeClient:  cfg.Client,
+		Params:      cfg.Params,
+		DataSource:  cfg.DataSource,
+		xcBot:       cfg.XcBot,
+		AgendaDB:    cfg.AgendasDBInstance,
+		ProposalsDB: cfg.ProposalsDB,
+		Status:      apitypes.NewStatus(uint32(nodeHeight), conns, APIVersion, cfg.AppVer, cfg.Params.Name),
+		maxCSVAddrs: cfg.MaxAddrs,
+		charts:      cfg.Charts,
 	}
 }
 
