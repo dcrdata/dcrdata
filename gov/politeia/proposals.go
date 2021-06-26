@@ -156,7 +156,7 @@ func (db *ProposalsDB) ProposalsSync() error {
 	}
 
 	log.Infof("%d politeia records were synced.",
-		int(newCount+ipCount+vrCount))
+		newCount+ipCount+vrCount)
 
 	return nil
 }
@@ -193,8 +193,6 @@ func (db *ProposalsDB) ProposalsAll(offset, rowsCount int,
 		Find(&proposals)
 	if err != nil && !errors.Is(err, storm.ErrNotFound) {
 		log.Errorf("Failed to fetch data from Proposals DB: %v", err)
-	} else {
-		err = nil
 	}
 
 	return proposals, totalCount, nil
