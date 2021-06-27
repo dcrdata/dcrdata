@@ -1014,7 +1014,6 @@ func _main(ctx context.Context) error {
 		if err := proposalsDB.ProposalsSync(); err != nil {
 			log.Errorf("updating proposals db failed: %v", err)
 		}
-		log.Info("Politeia proposals sync complete.")
 	}()
 
 	// Monitors for new blocks, transactions, and reorgs should not run before
