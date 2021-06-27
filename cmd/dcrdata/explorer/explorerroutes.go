@@ -2264,7 +2264,7 @@ func (exp *explorerUI) ProposalPage(w http.ResponseWriter, r *http.Request) {
 		CommonPageData: commonData,
 		Data:           prop,
 		PoliteiaURL:    exp.politeiaURL,
-		ShortToken:     prop.Token[1:7],
+		ShortToken:     prop.Token[0:7],
 		Metadata:       prop.Metadata(int64(commonData.Tip.Height), int64(exp.ChainParams.TargetTimePerBlock/time.Second)),
 	})
 

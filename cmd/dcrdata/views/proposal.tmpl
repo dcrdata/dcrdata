@@ -30,7 +30,7 @@
                   <span class="fs18 font-weight-bold lh1rem">Proposal in discussion</span>
                   <div class="py-2">
                     {{.Username}} has not initiated voting yet. There is
-                    <a href="{{$.PoliteiaURL}}/proposals/{{$.ShortToken}}">an ongoing discussion</a>
+                    <a href="{{$.PoliteiaURL}}/record/{{$.ShortToken}}">an ongoing discussion</a>
                     of this proposal happening on Politeia.
                   </div>
                 {{end}}
@@ -100,7 +100,7 @@
                 </div>
               {{end}}{{/* END LIVE OR FINISHED */ -}}
               <div class="d-flex justify-content-between w-100 pb-1 fs-17">
-                <a class="d-block" href="{{$.PoliteiaURL}}/proposals/{{$.ShortToken}}">
+                <a class="d-block" href="{{$.PoliteiaURL}}/record/{{$.ShortToken}}">
                   <span class="dcricon-discussion mr-2 pt-1"></span>
                   Discussion
                 </a>

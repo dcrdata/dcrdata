@@ -29,7 +29,7 @@ var (
 	// initialized correctly.
 	errDef = fmt.Errorf("ProposalDB was not initialized correctly")
 
-	// dbVersion is the current requirxed version of the proposals.db.
+	// dbVersion is the current required version of the proposals.db.
 	dbVersion = semver.NewSemver(2, 0, 0)
 )
 
@@ -50,7 +50,7 @@ type ProposalsDB struct {
 func NewProposalsDB(politeiaURL, dbPath string) (*ProposalsDB, error) {
 	// Validate arguments
 	if politeiaURL == "" {
-		return nil, fmt.Errorf("missing politeia API URL")
+		return nil, fmt.Errorf("missing Politeia URL")
 	}
 	if dbPath == "" {
 		return nil, fmt.Errorf("missing db path")
@@ -90,7 +90,7 @@ func NewProposalsDB(politeiaURL, dbPath string) (*ProposalsDB, error) {
 		log.Infof("proposals.db version %v was set", dbVersion)
 	}
 
-	pc, err := piclient.New(politeiaURL+"api", piclient.Opts{})
+	pc, err := piclient.New(politeiaURL+"/api", piclient.Opts{})
 	if err != nil {
 		return nil, err
 	}
@@ -153,7 +153,7 @@ func (db *ProposalsDB) ProposalsSync() error {
 		return err
 	}
 
-	log.Info("Politeia records sync complete.")
+	log.Info("Politeia records were synced.")
 
 	return nil
 }
@@ -311,7 +311,7 @@ func (db *ProposalsDB) fetchProposalsData(tokens []string) ([]*pitypes.ProposalR
 		proposal.CommentsCount =
 			int32(commentsCounts[record.CensorshipRecord.Token])
 
-		// Vote data
+		// Vote summary data
 		summary := voteSummaries[proposal.Token]
 		proposal.VoteStatus = summary.Status
 		proposal.VoteResults = summary.Results
@@ -460,7 +460,7 @@ func (db *ProposalsDB) proposalsNewUpdate() error {
 				err)
 		}
 
-		// Create proposals map
+		// Create proposals map from local stormdb proposals
 		proposalsMap := make(map[string]*pitypes.ProposalRecord, len(proposals))
 		for _, prop := range proposals {
 			proposalsMap[prop.Token] = prop
@@ -498,11 +498,10 @@ func (db *ProposalsDB) proposalsNewUpdate() error {
 	return nil
 }
 
-// proposalsInProgressUpdate fetches proposals with the vote status equal to
-// unauthorized, authorized and started. Afterwords, it proceeds to check if
-// any of them need to be updated on stormdb.
+// proposalsInProgressUpdate retrieves proposals with the vote status equal to
+// unauthorized, authorized and started. Afterwords, it proceeds to check with
+// newly fetched data if any of them need to be updated on stormdb.
 func (db *ProposalsDB) proposalsInProgressUpdate() error {
-	// Get proposals by vote status from storm db
 	var propsInProgress []*pitypes.ProposalRecord
 	err := db.dbP.Select(
 		q.Or(
@@ -515,7 +514,6 @@ func (db *ProposalsDB) proposalsInProgressUpdate() error {
 		return err
 	}
 
-	// Update in progress proposals with newly fetched data from pi's API.
 	for _, prop := range propsInProgress {
 		proposals, err := db.fetchProposalsData([]string{prop.Token})
 		if err != nil {

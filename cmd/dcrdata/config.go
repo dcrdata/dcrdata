@@ -641,6 +641,14 @@ func loadConfig() (*config, error) {
 		}
 	}
 
+	// Checks if the expected format of the politeia URL was set. It also drops any
+	// unnecessary parts of the URL.
+	urlPath, err := retrieveRootPath(cfg.PoliteiaURL)
+	if err != nil {
+		return loadConfigError(err)
+	}
+	cfg.PoliteiaURL = urlPath
+
 	switch cfg.ServerHeader {
 	case "off":
 		cfg.ServerHeader = ""

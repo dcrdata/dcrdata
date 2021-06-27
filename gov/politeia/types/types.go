@@ -8,9 +8,9 @@ import (
 	ticketvotev1 "github.com/decred/politeia/politeiawww/api/ticketvote/v1"
 )
 
-// ProposalRecord is the struct that holds all politeia data that dcrdata needs.
-// It is also the object data that we save to the database. It fetches data
-// from three politeia api's: records, comments and ticketvote.
+// ProposalRecord is the struct that holds all politeia data that dcrdata needs
+// for each proposal. This is the object that is saved to stormdb. It uses data
+// from three politeia API's: records, comments and ticketvote.
 type ProposalRecord struct {
 	ID int `json:"id" storm:"id,increment"`
 
@@ -45,7 +45,7 @@ type ProposalRecord struct {
 
 	// Synced is used to indicate that this proposal is already fully
 	// synced with politeia server, and does not need to make any more
-	// requests for this proposal
+	// http requests for this proposal
 	Synced bool `json:"synced"`
 
 	// Timestamps
@@ -54,14 +54,15 @@ type ProposalRecord struct {
 	AbandonedAt uint64 `json:"abandonedat"`
 }
 
-// ProposalChartData defines the data used to plot proposal votes charts.
+// ProposalChartData defines the data used to plot proposal ticket votes
+// charts.
 type ProposalChartData struct {
 	Yes  []uint64 `json:"yes"`
 	No   []uint64 `json:"no"`
 	Time []int64  `json:"time"`
 }
 
-// IsEqual compares data between the two ProposalsInfo structs passed.
+// IsEqual compares data between the two ProposalRecord structs passed.
 func (pi *ProposalRecord) IsEqual(b ProposalRecord) bool {
 	if pi.Token != b.Token || pi.Name != b.Name || pi.State != b.State ||
 		pi.Status != b.Status || pi.StatusChangeMsg != b.StatusChangeMsg ||
@@ -77,8 +78,8 @@ func (pi *ProposalRecord) IsEqual(b ProposalRecord) bool {
 // ProposalMetadata contains some status-dependent data representations for
 // display purposes.
 type ProposalMetadata struct {
-	// Time until start for "Authorized" proposals, Time until done for "Started"
-	// proposals.
+	// Time until start for "Authorized" proposals, Time until done for
+	// "Started" proposals.
 	SecondsTil         int64
 	IsPassing          bool
 	Approval           float32
@@ -95,9 +96,9 @@ type ProposalMetadata struct {
 }
 
 // Metadata performs some common manipulations of the ProposalRecord data to
-// prepare figures for display. Many of these manipulations require a tip height
-// and a target block time for the network, so those must be provided as
-// arguments.
+// prepare figures for display. Many of these manipulations require a tip
+// height and a target block time for the network, so those must be provided
+// as arguments.
 func (pi *ProposalRecord) Metadata(tip, targetBlockTime int64) *ProposalMetadata {
 	meta := new(ProposalMetadata)
 	switch pi.VoteStatus {
