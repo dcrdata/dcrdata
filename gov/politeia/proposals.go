@@ -121,9 +121,7 @@ func (db *ProposalsDB) ProposalsLastSync() int64 {
 }
 
 // ProposalsSync is responsible for keeping an up-to-date database synced
-// with politeia's latest updates. It first updates the proposals stored
-// in stormdb. Then it fetches possible new proposals since last sync,
-// and saves them to stormdb.
+// with politeia's latest updates.
 //
 // Satisfies the PoliteiaBackend interface.
 func (db *ProposalsDB) ProposalsSync() error {
@@ -132,31 +130,30 @@ func (db *ProposalsDB) ProposalsSync() error {
 		return errDef
 	}
 
-	// Save the timestamp of the last update check
+	// Save the timestamp of the last update check.
 	defer atomic.StoreInt64(&db.lastSync, time.Now().UTC().Unix())
 
-	// Update our db with any new proposals on politeia server
-	newCount, err := db.proposalsNewUpdate()
+	// Update db with any new proposals on politeia server.
+	err := db.proposalsNewUpdate()
 	if err != nil {
 		return err
 	}
 
 	// Update all current proposals who might still be suffering changes
-	// with edits, and that has undergone some data change
-	ipCount, err := db.proposalsInProgressUpdate()
+	// with edits, and that has undergone some data change.
+	err = db.proposalsInProgressUpdate()
 	if err != nil {
 		return err
 	}
 
 	// Update vote results data on finished proposals that are not yet
-	// fully synced with politeia
-	vrCount, err := db.proposalsVoteResultsUpdate()
+	// fully synced with politeia.
+	err = db.proposalsVoteResultsUpdate()
 	if err != nil {
 		return err
 	}
 
-	log.Infof("%d politeia records were synced.",
-		newCount+ipCount+vrCount)
+	log.Info("Politeia records sync complete.")
 
 	return nil
 }
@@ -436,11 +433,11 @@ func (db *ProposalsDB) proposal(searchBy, searchTerm string) (*pitypes.ProposalR
 
 // proposalsNewUpdate verifies if there is any new proposals on the politeia
 // server that are not yet synced with our stormdb.
-func (db *ProposalsDB) proposalsNewUpdate() (int, error) {
+func (db *ProposalsDB) proposalsNewUpdate() error {
 	var proposals []*pitypes.ProposalRecord
 	err := db.dbP.All(&proposals)
 	if err != nil {
-		return 0, fmt.Errorf("stormdb All err: %v", err)
+		return fmt.Errorf("stormdb All err: %v", err)
 	}
 
 	var tokens []string
@@ -448,7 +445,7 @@ func (db *ProposalsDB) proposalsNewUpdate() (int, error) {
 		// Empty db so first time fetching proposals, fetch all vetted tokens
 		vettedTokens, err := db.fetchVettedTokensInventory()
 		if err != nil {
-			return 0, err
+			return err
 		}
 		tokens = vettedTokens
 	} else {
@@ -459,7 +456,7 @@ func (db *ProposalsDB) proposalsNewUpdate() (int, error) {
 		}
 		reply, err := db.client.RecordInventoryOrdered(inventoryReq)
 		if err != nil {
-			return 0, fmt.Errorf("Pi client RecordInventoryOrdered err: %v",
+			return fmt.Errorf("Pi client RecordInventoryOrdered err: %v",
 				err)
 		}
 
@@ -486,7 +483,7 @@ func (db *ProposalsDB) proposalsNewUpdate() (int, error) {
 	if len(tokens) > 0 {
 		prs, err = db.fetchProposalsData(tokens)
 		if err != nil {
-			return 0, err
+			return err
 		}
 	}
 
@@ -494,17 +491,17 @@ func (db *ProposalsDB) proposalsNewUpdate() (int, error) {
 	if len(prs) > 0 {
 		err = db.proposalsSave(prs)
 		if err != nil {
-			return 0, err
+			return err
 		}
 	}
 
-	return len(prs), nil
+	return nil
 }
 
 // proposalsInProgressUpdate fetches proposals with the vote status equal to
 // unauthorized, authorized and started. Afterwords, it proceeds to check if
 // any of them need to be updated on stormdb.
-func (db *ProposalsDB) proposalsInProgressUpdate() (int, error) {
+func (db *ProposalsDB) proposalsInProgressUpdate() error {
 	// Get proposals by vote status from storm db
 	var propsInProgress []*pitypes.ProposalRecord
 	err := db.dbP.Select(
@@ -515,24 +512,27 @@ func (db *ProposalsDB) proposalsInProgressUpdate() (int, error) {
 		),
 	).Find(&propsInProgress)
 	if err != nil && !errors.Is(err, storm.ErrNotFound) {
-		return 0, err
+		return err
 	}
 
 	// Update in progress proposals with newly fetched data from pi's API.
-	countUpdated := 0
 	for _, prop := range propsInProgress {
 		proposals, err := db.fetchProposalsData([]string{prop.Token})
 		if err != nil {
-			return 0, fmt.Errorf("fetchProposalsData failed with err: %s", err)
+			return fmt.Errorf("fetchProposalsData failed with err: %s", err)
 		}
 		proposal := proposals[0]
 
-		// If voting on the proposal has already started, sync ticket vote
-		// results data as well.
-		if prop.VoteStatus == ticketvotev1.VoteStatusStarted {
+		// Ticket vote results is an expensive API call, so we check
+		// appropriate conditions to call it. Vote status needs to be started
+		// for in progress proposals. Then we check the total votes to see
+		// if any new votes has been cast, or if its the first time fetching
+		// vote results and building chart data.
+		if prop.VoteStatus == ticketvotev1.VoteStatusStarted &&
+			(prop.TotalVotes != proposal.TotalVotes || prop.ChartData == nil) {
 			voteResults, err := db.fetchTicketVoteResults(prop.Token)
 			if err != nil {
-				return 0, fmt.Errorf("fetchTicketVoteResults failed with err: %s", err)
+				return fmt.Errorf("fetchTicketVoteResults failed with err: %s", err)
 			}
 			proposal.ChartData = voteResults
 		}
@@ -547,19 +547,18 @@ func (db *ProposalsDB) proposalsInProgressUpdate() (int, error) {
 
 		err = db.dbP.Update(proposal)
 		if err != nil {
-			return 0, fmt.Errorf("storm db Update failed with err: %s", err)
+			return fmt.Errorf("storm db Update failed with err: %s", err)
 		}
-
-		countUpdated++
 	}
 
-	return countUpdated, nil
+	return nil
 }
 
 // proposalsVoteResultsUpdate verifies if there is still a need to update vote
 // results data for proposals with the vote status equal to finished, approved
-// and rejected.
-func (db *ProposalsDB) proposalsVoteResultsUpdate() (int, error) {
+// and rejected. This is the final sync between dcrdata and politeia servers
+// for proposals with the final finished/approved/rejected vote status.
+func (db *ProposalsDB) proposalsVoteResultsUpdate() error {
 	// Get proposals that need to be synced
 	var propsVotingComplete []*pitypes.ProposalRecord
 	err := db.dbP.Select(
@@ -578,27 +577,24 @@ func (db *ProposalsDB) proposalsVoteResultsUpdate() (int, error) {
 		),
 	).Find(&propsVotingComplete)
 	if err != nil && !errors.Is(err, storm.ErrNotFound) {
-		return 0, err
+		return err
 	}
 
 	// Update finished proposals that are not yet synced with the
 	// latest vote results.
-	countUpdated := 0
 	for _, prop := range propsVotingComplete {
 		voteResults, err := db.fetchTicketVoteResults(prop.Token)
 		if err != nil {
-			return 0, fmt.Errorf("fetchTicketVoteResults failed with err: %s", err)
+			return fmt.Errorf("fetchTicketVoteResults failed with err: %s", err)
 		}
 		prop.ChartData = voteResults
 		prop.Synced = true
 
 		err = db.dbP.Update(prop)
 		if err != nil {
-			return 0, fmt.Errorf("storm db Update failed with err: %s", err)
+			return fmt.Errorf("storm db Update failed with err: %s", err)
 		}
-
-		countUpdated++
 	}
 
-	return countUpdated, nil
+	return nil
 }

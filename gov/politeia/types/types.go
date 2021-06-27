@@ -64,12 +64,11 @@ type ProposalChartData struct {
 // IsEqual compares data between the two ProposalsInfo structs passed.
 func (pi *ProposalRecord) IsEqual(b ProposalRecord) bool {
 	if pi.Token != b.Token || pi.Name != b.Name || pi.State != b.State ||
-		pi.CommentsCount != b.CommentsCount ||
-		pi.StatusChangeMsg != b.StatusChangeMsg ||
-		pi.Status != b.Status || pi.Timestamp != b.Timestamp ||
+		pi.Status != b.Status || pi.StatusChangeMsg != b.StatusChangeMsg ||
+		pi.CommentsCount != b.CommentsCount || pi.Timestamp != b.Timestamp ||
 		pi.VoteStatus != b.VoteStatus || pi.TotalVotes != b.TotalVotes ||
-		pi.PublishedAt != b.PublishedAt ||
-		pi.CensoredAt != b.CensoredAt || pi.AbandonedAt != b.AbandonedAt {
+		pi.PublishedAt != b.PublishedAt || pi.CensoredAt != b.CensoredAt ||
+		pi.AbandonedAt != b.AbandonedAt || pi.ChartData != b.ChartData {
 		return false
 	}
 	return true
