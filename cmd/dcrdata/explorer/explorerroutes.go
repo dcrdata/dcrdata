@@ -1913,14 +1913,13 @@ func (exp *explorerUI) Search(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Execute search for proposals by both RefID and proposal token before
-	// the address search because most search strings with alphanumeric
-	// characters are interprated as addresses.
+	// Execute search for proposals by proposal token before the address
+	// search because most search strings with alphanumeric characters
+	// are interprated as addresses.
 	if exp.proposals != nil {
 		// Check if the search term references a proposal token exists.
 		prop, err := exp.proposals.ProposalByToken(searchStr)
 		if err != nil {
-			// how to properly handle error here?
 			return
 		}
 		if err == nil {
