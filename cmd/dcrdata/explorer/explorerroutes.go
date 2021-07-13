@@ -534,6 +534,15 @@ func (exp *explorerUI) timeBasedBlocksListing(val string, w http.ResponseWriter,
 		return
 	}
 
+	lastOffsetRows := uint64(maxOffset) % rows
+	var lastOffset uint64
+
+	if lastOffsetRows == 0 && uint64(maxOffset) > rows {
+		lastOffset = uint64(maxOffset) - rows
+	} else if lastOffsetRows > 0 && uint64(maxOffset) > rows {
+		lastOffset = uint64(maxOffset) - lastOffsetRows
+	}
+
 	// If the view is "years" and the top row is this year, modify the formatted
 	// time string to indicate its a partial result.
 	if val == "Years" && len(data) > 0 && data[0].EndTime.T.Year() == time.Now().Year() {
@@ -549,6 +558,7 @@ func (exp *explorerUI) timeBasedBlocksListing(val string, w http.ResponseWriter,
 		Offset       int64
 		Limit        int64
 		BestGrouping int64
+		LastOffset   int64
 		Pages        pageNumbers
 	}{
 		CommonPageData: exp.commonData(r),
@@ -557,6 +567,7 @@ func (exp *explorerUI) timeBasedBlocksListing(val string, w http.ResponseWriter,
 		Offset:         int64(offset),
 		Limit:          int64(rows),
 		BestGrouping:   maxOffset,
+		LastOffset:     int64(lastOffset),
 		Pages:          calcPages(int(maxOffset), int(rows), int(offset), linkTemplate),
 	})
 
@@ -2148,8 +2159,8 @@ func (exp *explorerUI) AgendaPage(w http.ResponseWriter, r *http.Request) {
 		totalVotes += agendaInfo.Choices[index].Count
 	}
 
-	ruleChangeI := exp.ChainParams.RuleChangeActivationInterval
-	qVotes := uint32(float64(ruleChangeI) * agendaInfo.QuorumProgress)
+	ruleChangeQ := exp.ChainParams.RuleChangeActivationQuorum
+	qVotes := uint32(float64(ruleChangeQ) * agendaInfo.QuorumProgress)
 
 	var timeLeft string
 	blocksLeft := summary.LockedIn - exp.Height()
@@ -2170,7 +2181,7 @@ func (exp *explorerUI) AgendaPage(w http.ResponseWriter, r *http.Request) {
 		*CommonPageData
 		Ai            *agendas.AgendaTagged
 		QuorumVotes   uint32
-		RuleChangeI   uint32
+		RuleChangeQ   uint32
 		VotingStarted int64
 		LockedIn      int64
 		BlocksLeft    int64
@@ -2180,7 +2191,7 @@ func (exp *explorerUI) AgendaPage(w http.ResponseWriter, r *http.Request) {
 		CommonPageData: exp.commonData(r),
 		Ai:             agendaInfo,
 		QuorumVotes:    qVotes,
-		RuleChangeI:    ruleChangeI,
+		RuleChangeQ:    ruleChangeQ,
 		VotingStarted:  summary.VotingStarted,
 		LockedIn:       summary.LockedIn,
 		BlocksLeft:     blocksLeft,
@@ -2348,6 +2359,15 @@ func (exp *explorerUI) ProposalsPage(w http.ResponseWriter, r *http.Request) {
 		ticketvotev1.VoteStatusIneligible:   "Ineligible",
 	}
 
+	lastOffsetRows := uint64(count) % rowsCount
+	var lastOffset uint64
+
+	if lastOffsetRows == 0 && uint64(count) > rowsCount {
+		lastOffset = uint64(count) - rowsCount
+	} else if lastOffsetRows > 0 && uint64(count) > rowsCount {
+		lastOffset = uint64(count) - lastOffsetRows
+	}
+
 	str, err := exp.templates.exec("proposals", struct {
 		*CommonPageData
 		Proposals     []*pitypes.ProposalRecord
@@ -2356,6 +2376,7 @@ func (exp *explorerUI) ProposalsPage(w http.ResponseWriter, r *http.Request) {
 		Offset        int64
 		Limit         int64
 		TotalCount    int64
+		LastOffset    int64
 		PoliteiaURL   string
 		LastPropSync  int64
 		TimePerBlock  int64
@@ -2367,6 +2388,7 @@ func (exp *explorerUI) ProposalsPage(w http.ResponseWriter, r *http.Request) {
 		Limit:          int64(rowsCount),
 		VStatusFilter:  int(filterBy),
 		TotalCount:     int64(count),
+		LastOffset:     int64(lastOffset),
 		PoliteiaURL:    exp.politeiaURL,
 		LastPropSync:   exp.proposals.ProposalsLastSync(),
 		TimePerBlock:   int64(exp.ChainParams.TargetTimePerBlock.Seconds()),
